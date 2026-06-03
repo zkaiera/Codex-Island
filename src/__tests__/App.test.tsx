@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../App";
@@ -50,6 +50,7 @@ describe("App", () => {
     expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
       mode: "island",
       edge: "top",
+      initial: true,
     });
   });
 
@@ -81,32 +82,36 @@ describe("App", () => {
     });
 
     render(<App />);
-    fireEvent.mouseEnter(screen.getAllByLabelText("Codex Island")[1]);
+    fireEvent.pointerEnter(screen.getByLabelText("Codex Island", { selector: ".island" }).parentElement!);
 
     expect(await screen.findByText("existing-project")).toBeInTheDocument();
     expect(listenMock).toHaveBeenCalledWith("sessions:changed", expect.any(Function));
   });
 
-  it("opens demo island directly from demo query", () => {
+  it("opens demo island directly from demo query", async () => {
     window.history.pushState({}, "", "/?demo=1");
 
     render(<App />);
-    fireEvent.mouseEnter(screen.getAllByLabelText("Codex Island")[1]);
+    fireEvent.pointerEnter(screen.getByLabelText("Codex Island", { selector: ".island" }).parentElement!);
 
-    expect(screen.getByText("web3-agent-research")).toBeInTheDocument();
+    expect(await screen.findByText("web3-agent-research")).toBeInTheDocument();
     expect(screen.getByText("codex-island-ui")).toBeInTheDocument();
-    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
-      mode: "island_expanded",
-      edge: "top",
-    });
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+        mode: "island_expanded",
+        edge: "top",
+        initial: false,
+      }),
+    );
   });
 
   it("keeps the island visible when hide fails outside Tauri", async () => {
     window.history.pushState({}, "", "/?demo=1");
 
     render(<App />);
-    fireEvent.mouseEnter(screen.getAllByLabelText("Codex Island")[1]);
-    fireEvent.click(screen.getByRole("button", { name: "隐藏 web3-agent-research" }));
+    fireEvent.pointerEnter(screen.getByLabelText("Codex Island", { selector: ".island" }).parentElement!);
+    const hideButton = await screen.findByRole("button", { name: "隐藏 web3-agent-research" });
+    fireEvent.click(hideButton);
 
     expect(await screen.findByText("web3-agent-research")).toBeInTheDocument();
   });

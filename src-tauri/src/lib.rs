@@ -34,7 +34,12 @@ fn snap_window(app: tauri::AppHandle) -> Option<windowing::SnapEdge> {
 }
 
 #[tauri::command]
-fn set_window_mode(mode: String, edge: Option<windowing::SnapEdge>, app: tauri::AppHandle) {
+fn set_window_mode(
+    mode: String,
+    edge: Option<windowing::SnapEdge>,
+    initial: bool,
+    app: tauri::AppHandle,
+) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
@@ -45,6 +50,7 @@ fn set_window_mode(mode: String, edge: Option<windowing::SnapEdge>, app: tauri::
         &app,
         windowing::WindowMode::from_name(&mode),
         edge.unwrap_or(windowing::SnapEdge::Top),
+        initial,
     );
 }
 

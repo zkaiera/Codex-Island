@@ -46,17 +46,17 @@ pub fn start_session_sync<R: Runtime>(
     }
     emit_visible_sessions(&app, &store);
 
+    let reload_state_dir = state_dir.clone();
     let (watcher, output_rx) = watch_directory(&state_dir)?;
 
     {
         let app = app.clone();
         let store = store.clone();
         std::thread::spawn(move || {
-            while let Ok(path) = output_rx.recv() {
-                if let Some(session) = load_session_file(&path) {
-                    let mut guard = store.write().expect("session store poisoned");
-                    guard.upsert(session);
-                }
+            while output_rx.recv().is_ok() {
+                let sessions = load_sessions_from_dir(&reload_state_dir);
+                let mut guard = store.write().expect("session store poisoned");
+                guard.replace_all(sessions);
                 emit_visible_sessions(&app, &store);
             }
         });

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -25,6 +25,7 @@ export default function App() {
   const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(new Set());
   const [isIslandExpanded, setIsIslandExpanded] = useState(false);
   const [snapEdge, setSnapEdge] = useState<SnapEdge>("top");
+  const didApplyInitialLayout = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -71,18 +72,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    void invoke<SnapEdge>("snap_window")
-      .then((edge) => {
-        if (edge) {
-          setSnapEdge(edge);
-        }
-      })
-      .catch(() => {
-        // 普通浏览器预览没有 Tauri 后端。
-      });
-  }, []);
-
   const visibleSessions = useMemo(
     () => sessions.filter((session) => !optimisticallyHidden.has(session.sessionId)),
     [optimisticallyHidden, sessions],
@@ -90,8 +79,10 @@ export default function App() {
 
   useLayoutEffect(() => {
     const mode = isIslandExpanded ? "island_expanded" : "island";
+    const initial = !didApplyInitialLayout.current;
+    didApplyInitialLayout.current = true;
 
-    void invoke("set_window_mode", { mode, edge: snapEdge }).catch(() => {
+    void invoke("set_window_mode", { mode, edge: snapEdge, initial }).catch(() => {
       // 普通浏览器预览没有 Tauri 窗口。
     });
   }, [isIslandExpanded, snapEdge]);

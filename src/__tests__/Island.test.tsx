@@ -10,6 +10,8 @@ const { invokeMock, outerPositionMock, setPositionMock } = vi.hoisted(() => ({
   setPositionMock: vi.fn(),
 }));
 
+const setPointerCaptureMock = vi.fn();
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
 }));
@@ -46,6 +48,11 @@ describe("Island", () => {
     outerPositionMock.mockReset();
     outerPositionMock.mockResolvedValue({ x: 100, y: 100 });
     setPositionMock.mockReset();
+    setPointerCaptureMock.mockReset();
+    Object.defineProperty(Element.prototype, "setPointerCapture", {
+      configurable: true,
+      value: setPointerCaptureMock,
+    });
     vi.useRealTimers();
   });
 
@@ -55,7 +62,7 @@ describe("Island", () => {
 
     render(<Island sessions={[newer, older]} onHide={() => undefined} />);
 
-    fireEvent.mouseEnter(screen.getByLabelText("Codex Island"));
+    fireEvent.pointerEnter(screen.getByLabelText("Codex Island").parentElement!);
 
     const titles = screen.getAllByText(/-project/).map((node) => node.textContent);
     expect(titles).toEqual(["older-project", "newer-project"]);
@@ -85,7 +92,8 @@ describe("Island", () => {
       />,
     );
 
-    fireEvent.mouseEnter(screen.getByLabelText("Codex Island"));
+    fireEvent.pointerEnter(screen.getByLabelText("Codex Island").parentElement!);
+    await vi.advanceTimersByTimeAsync(100);
     expect(screen.getByText("one-project")).toBeInTheDocument();
     expect(screen.getByText(/运行中/)).toBeInTheDocument();
     expect(onExpandedChange).toHaveBeenCalledWith(true);
@@ -93,8 +101,8 @@ describe("Island", () => {
     fireEvent.click(screen.getByRole("button", { name: "隐藏 one-project" }));
     expect(onHide).toHaveBeenCalledWith("one");
 
-    fireEvent.mouseLeave(screen.getByLabelText("Codex Island").parentElement!);
-    await vi.runAllTimersAsync();
+    fireEvent.pointerLeave(screen.getByLabelText("Codex Island").parentElement!);
+    await vi.advanceTimersByTimeAsync(200);
     expect(onExpandedChange).toHaveBeenCalledWith(false);
   });
 
@@ -110,12 +118,29 @@ describe("Island", () => {
       />,
     );
 
-    fireEvent.mouseDown(screen.getByLabelText("Codex Island"), { button: 0 });
+    const islandWrapper = screen.getByLabelText("Codex Island").parentElement!;
+
+    fireEvent.pointerDown(islandWrapper, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      screenX: 100,
+      screenY: 100,
+    });
     await Promise.resolve();
-    fireEvent.mouseMove(window, { screenX: 135, screenY: 120 });
-    fireEvent.mouseUp(window);
+    fireEvent.pointerMove(islandWrapper, {
+      pointerId: 1,
+      pointerType: "mouse",
+      screenX: 135,
+      screenY: 120,
+    });
+    fireEvent.pointerUp(islandWrapper, {
+      pointerId: 1,
+      pointerType: "mouse",
+    });
     await Promise.resolve();
 
+    expect(setPointerCaptureMock).toHaveBeenCalledWith(1);
     expect(setPositionMock).toHaveBeenCalled();
     expect(invokeMock).toHaveBeenCalledWith("snap_window");
     expect(onSnapEdgeChange).toHaveBeenCalledWith("left");

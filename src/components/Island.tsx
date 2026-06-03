@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 
@@ -26,9 +26,15 @@ export function Island({
   maxVisibleCollapsed = calculateVisibleCount(),
 }: IslandProps) {
   const [expanded, setExpanded] = useState(false);
-  const [snapping, setSnapping] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [collapseTimer, setCollapseTimer] = useState<number | null>(null);
+  const collapseTimer = useRef<number | null>(null);
+  const expandTimer = useRef<number | null>(null);
+  const expandedRef = useRef(expanded);
+  const dragState = useRef<{
+    pointerId: number;
+    startMouse: { x: number; y: number };
+    startPosition: { x: number; y: number } | null;
+  } | null>(null);
 
   const orderedSessions = useMemo(
     () =>
@@ -42,18 +48,63 @@ export function Island({
   const visiblePills = orderedSessions.slice(0, maxVisibleCollapsed);
   const hiddenCount = Math.max(orderedSessions.length - visiblePills.length, 0);
 
+  useEffect(
+    () => () => {
+      if (collapseTimer.current !== null) {
+        window.clearTimeout(collapseTimer.current);
+      }
+      if (expandTimer.current !== null) {
+        window.clearTimeout(expandTimer.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
+
   function updateExpanded(nextExpanded: boolean) {
     if (dragging) {
       return;
     }
 
-    if (collapseTimer !== null) {
-      window.clearTimeout(collapseTimer);
-      setCollapseTimer(null);
+    if (collapseTimer.current !== null) {
+      window.clearTimeout(collapseTimer.current);
+      collapseTimer.current = null;
     }
 
+    expandedRef.current = nextExpanded;
     setExpanded(nextExpanded);
     onExpandedChange?.(nextExpanded);
+  }
+
+  function queueExpand() {
+    if (dragging) {
+      return;
+    }
+
+    if (expandedRef.current) {
+      if (collapseTimer.current !== null) {
+        window.clearTimeout(collapseTimer.current);
+        collapseTimer.current = null;
+      }
+      return;
+    }
+
+    if (collapseTimer.current !== null) {
+      window.clearTimeout(collapseTimer.current);
+      collapseTimer.current = null;
+    }
+
+    if (expandTimer.current !== null) {
+      return;
+    }
+
+    expandTimer.current = window.setTimeout(() => {
+      expandTimer.current = null;
+      updateExpanded(true);
+    }, 90);
   }
 
   function queueCollapse() {
@@ -61,23 +112,43 @@ export function Island({
       return;
     }
 
-    if (collapseTimer !== null) {
-      window.clearTimeout(collapseTimer);
+    if (expandTimer.current !== null) {
+      window.clearTimeout(expandTimer.current);
+      expandTimer.current = null;
     }
 
-    const nextTimer = window.setTimeout(() => {
-      setExpanded(false);
-      onExpandedChange?.(false);
-    }, 180);
-    setCollapseTimer(nextTimer);
-  }
-
-  async function handleDragStart(event: MouseEvent<HTMLDivElement>) {
-    if (event.button !== 0 || (event.target as Element).closest("button")) {
+    if (!expandedRef.current) {
       return;
     }
 
+    if (collapseTimer.current !== null) {
+      return;
+    }
+
+    collapseTimer.current = window.setTimeout(() => {
+      collapseTimer.current = null;
+      updateExpanded(false);
+    }, 180);
+  }
+
+  async function handleDragStart(event: PointerEvent<HTMLDivElement>) {
+    if ((event.button ?? 0) !== 0 || (event.target as Element).closest("button")) {
+      return;
+    }
+
+    const pointerId = event.pointerId ?? 1;
     event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(pointerId);
+    if (expandTimer.current !== null) {
+      window.clearTimeout(expandTimer.current);
+      expandTimer.current = null;
+    }
+    if (collapseTimer.current !== null) {
+      window.clearTimeout(collapseTimer.current);
+      collapseTimer.current = null;
+    }
+
     setDragging(true);
     setExpanded(false);
     onExpandedChange?.(false);
@@ -85,41 +156,58 @@ export function Island({
     const appWindow = getCurrentWindow();
     const startMouse = { x: event.screenX, y: event.screenY };
 
-    let startPosition: { x: number; y: number };
+    dragState.current = {
+      pointerId,
+      startMouse,
+      startPosition: null,
+    };
+
     try {
-      startPosition = await appWindow.outerPosition();
+      const startPosition = await appWindow.outerPosition();
+      if (!dragState.current || dragState.current.pointerId !== pointerId) {
+        return;
+      }
+      dragState.current.startPosition = startPosition;
     } catch {
       setDragging(false);
+      dragState.current = null;
+      return;
+    }
+  }
+
+  function handleDragMove(event: PointerEvent<HTMLDivElement>) {
+    const state = dragState.current;
+    const pointerId = event.pointerId ?? state?.pointerId;
+    if (!state || state.pointerId !== pointerId || !state.startPosition) {
       return;
     }
 
-    function handleMove(moveEvent: globalThis.MouseEvent) {
-      const nextX = startPosition.x + moveEvent.screenX - startMouse.x;
-      const nextY = startPosition.y + moveEvent.screenY - startMouse.y;
-      void appWindow.setPosition(new PhysicalPosition(nextX, nextY));
+    const nextX = state.startPosition.x + event.screenX - state.startMouse.x;
+    const nextY = state.startPosition.y + event.screenY - state.startMouse.y;
+    void getCurrentWindow().setPosition(new PhysicalPosition(nextX, nextY));
+  }
+
+  function handleDragEnd(event: PointerEvent<HTMLDivElement>) {
+    const state = dragState.current;
+    const pointerId = event.pointerId ?? state?.pointerId;
+    if (!state || state.pointerId !== pointerId) {
+      return;
     }
 
-    function handleUp() {
-      window.removeEventListener("mousemove", handleMove);
-      window.removeEventListener("mouseup", handleUp);
-      setDragging(false);
-      setSnapping(true);
-      void invoke<SnapEdge>("snap_window")
-        .then((edge) => {
-          if (edge) {
-            onSnapEdgeChange?.(edge);
-          }
-        })
-        .catch(() => {
-          // 普通浏览器预览没有 Tauri 后端。
-        })
-        .finally(() => {
-          window.setTimeout(() => setSnapping(false), 260);
-        });
+    if (event.currentTarget.hasPointerCapture?.(pointerId)) {
+      event.currentTarget.releasePointerCapture(pointerId);
     }
-
-    window.addEventListener("mousemove", handleMove);
-    window.addEventListener("mouseup", handleUp, { once: true });
+    dragState.current = null;
+    setDragging(false);
+    void invoke<SnapEdge>("snap_window")
+      .then((edge) => {
+        if (edge) {
+          onSnapEdgeChange?.(edge);
+        }
+      })
+      .catch(() => {
+        // 普通浏览器预览没有 Tauri 后端。
+      });
   }
 
   return (
@@ -128,15 +216,17 @@ export function Island({
         "island-wrapper",
         expanded ? "island-wrapper--expanded" : "",
         dragging ? "island-wrapper--dragging" : "",
-        snapping ? "island-wrapper--snapping" : "",
         `island-wrapper--edge-${snapEdge}`,
       ]
         .filter(Boolean)
         .join(" ")}
       data-tauri-drag-region="false"
-      onMouseDown={handleDragStart}
-      onMouseEnter={() => updateExpanded(true)}
-      onMouseLeave={queueCollapse}
+      onPointerDown={handleDragStart}
+      onPointerMove={handleDragMove}
+      onPointerUp={handleDragEnd}
+      onPointerCancel={handleDragEnd}
+      onPointerEnter={queueExpand}
+      onPointerLeave={queueCollapse}
     >
       <div className="island" aria-label="Codex Island">
         <div className="island__pills">
@@ -151,8 +241,8 @@ export function Island({
         </div>
       </div>
 
-      {expanded && orderedSessions.length > 0 ? (
-        <div className="island-panel">
+      {orderedSessions.length > 0 ? (
+        <div className={`island-panel${expanded ? " island-panel--open" : ""}`}>
           <div className="island-panel__header">{orderedSessions.length} active</div>
           <SessionList sessions={orderedSessions} onHide={onHide} />
         </div>

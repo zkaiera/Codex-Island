@@ -74,13 +74,14 @@ pub fn snap_main_window<R: Runtime>(app: &AppHandle<R>) -> Option<SnapEdge> {
             height: work_area.size.height as i32,
         },
     );
+    let frame = WindowFrame {
+        x: position.x,
+        y: position.y,
+        width: size.width as i32,
+        height: size.height as i32,
+    };
     let next_position = snapped_position(
-        WindowFrame {
-            x: position.x,
-            y: position.y,
-            width: size.width as i32,
-            height: size.height as i32,
-        },
+        frame,
         Rect {
             x: work_area.position.x,
             y: work_area.position.y,
@@ -102,6 +103,7 @@ pub fn apply_window_layout<R: Runtime>(
     app: &AppHandle<R>,
     mode: WindowMode,
     edge: SnapEdge,
+    initial: bool,
 ) -> Option<()> {
     let window = app.get_webview_window("main")?;
     let position = window.outer_position().ok()?;
@@ -119,17 +121,20 @@ pub fn apply_window_layout<R: Runtime>(
         height: size.height as i32,
     };
     let layout = layout_for(mode, edge);
-    let next_position = anchored_position(
-        frame,
-        Rect {
-            x: work_area.position.x,
-            y: work_area.position.y,
-            width: work_area.size.width as i32,
-            height: work_area.size.height as i32,
-        },
-        layout,
-        edge,
-    );
+    let work_area = Rect {
+        x: work_area.position.x,
+        y: work_area.position.y,
+        width: work_area.size.width as i32,
+        height: work_area.size.height as i32,
+    };
+    let next_position = if initial {
+        initial_position_for_layout(work_area, layout, edge)
+    } else {
+        match mode {
+            WindowMode::Island => docked_position(frame, work_area, layout, edge),
+            WindowMode::IslandExpanded => anchored_position(frame, work_area, layout, edge),
+        }
+    };
 
     let _ = window.set_size(Size::Physical(PhysicalSize::new(
         layout.width as u32,
@@ -161,6 +166,53 @@ pub fn layout_for(mode: WindowMode, edge: SnapEdge) -> WindowLayout {
             width: 430,
             height: 520,
         },
+    }
+}
+
+pub fn initial_position_for_layout(
+    work_area: Rect,
+    next: WindowLayout,
+    edge: SnapEdge,
+) -> (i32, i32) {
+    let centered_x = work_area.x + (work_area.width - next.width) / 2;
+    let centered_y = work_area.y + (work_area.height - next.height) / 2;
+    let max_x = work_area.x + work_area.width - next.width;
+    let max_y = work_area.y + work_area.height - next.height;
+
+    match edge {
+        SnapEdge::Top => (clamp(centered_x, work_area.x, max_x), work_area.y - next.height / 2),
+        SnapEdge::Left => (work_area.x - next.width / 2, clamp(centered_y, work_area.y, max_y)),
+        SnapEdge::Right => (
+            work_area.x + work_area.width - next.width / 2,
+            clamp(centered_y, work_area.y, max_y),
+        ),
+    }
+}
+
+pub fn docked_position(
+    current: WindowFrame,
+    work_area: Rect,
+    next: WindowLayout,
+    edge: SnapEdge,
+) -> (i32, i32) {
+    let current_center_x = current.x + current.width / 2;
+    let current_center_y = current.y + current.height / 2;
+    let max_x = work_area.x + work_area.width - next.width;
+    let max_y = work_area.y + work_area.height - next.height;
+
+    match edge {
+        SnapEdge::Top => (
+            clamp(current_center_x - next.width / 2, work_area.x, max_x),
+            work_area.y - next.height / 2,
+        ),
+        SnapEdge::Left => (
+            work_area.x - next.width / 2,
+            clamp(current_center_y - next.height / 2, work_area.y, max_y),
+        ),
+        SnapEdge::Right => (
+            work_area.x + work_area.width - next.width / 2,
+            clamp(current_center_y - next.height / 2, work_area.y, max_y),
+        ),
     }
 }
 
@@ -207,17 +259,15 @@ pub fn nearest_edge(window: WindowFrame, work_area: Rect) -> SnapEdge {
 }
 
 pub fn snapped_position(window: WindowFrame, work_area: Rect, edge: SnapEdge) -> (i32, i32) {
-    let max_x = work_area.x + work_area.width - window.width;
-    let max_y = work_area.y + work_area.height - window.height;
-
-    match edge {
-        SnapEdge::Top => (clamp(window.x, work_area.x, max_x), work_area.y),
-        SnapEdge::Left => (work_area.x, clamp(window.y, work_area.y, max_y)),
-        SnapEdge::Right => (
-            work_area.x + work_area.width - window.width,
-            clamp(window.y, work_area.y, max_y),
-        ),
-    }
+    docked_position(
+        window,
+        work_area,
+        WindowLayout {
+            width: window.width,
+            height: window.height,
+        },
+        edge,
+    )
 }
 
 fn clamp(value: i32, min: i32, max: i32) -> i32 {

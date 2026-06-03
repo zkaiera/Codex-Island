@@ -62,27 +62,17 @@ body {
   align-items: center;
   gap: 8px;
   pointer-events: auto;
-  --snap-surface-transform: translateY(-2px) scaleX(1.08) scaleY(0.82);
-}
-
-.island-wrapper--expanded {
-  padding-top: 0;
+  --drag-scale: 1;
 }
 
 .island-wrapper--edge-left {
   align-items: flex-start;
   flex-direction: row;
-  --snap-surface-transform: translateX(-2px) scaleX(0.84) scaleY(1.12);
 }
 
 .island-wrapper--edge-right {
   align-items: flex-end;
   flex-direction: row-reverse;
-  --snap-surface-transform: translateX(2px) scaleX(0.84) scaleY(1.12);
-}
-
-.island-wrapper--edge-top {
-  --snap-surface-transform: translateY(-2px) scaleX(1.08) scaleY(0.82);
 }
 
 .island {
@@ -102,10 +92,12 @@ body {
     0 0 0 1px rgb(255 255 255 / 3%),
     inset 0 1px 0 rgb(255 255 255 / 10%);
   cursor: grab;
+  transform: scale(var(--drag-scale));
   transform-origin: top center;
   transition:
-    border-radius 140ms ease,
-    box-shadow 140ms ease;
+    transform 180ms ease,
+    border-radius 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .island-wrapper--edge-left .island,
@@ -123,13 +115,9 @@ body {
   transform-origin: right center;
 }
 
-.island-wrapper--snapping .island {
-  animation: surface-tension 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
 .island-wrapper--dragging .island {
   cursor: grabbing;
-  transform: scale(0.96);
+  --drag-scale: 0.98;
 }
 
 .island__pills {
@@ -202,12 +190,27 @@ body {
     0 20px 50px rgb(0 0 0 / 45%),
     inset 0 1px 0 rgb(255 255 255 / 8%);
   overflow: hidden;
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-10px) scale(0.985);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    max-height 180ms ease;
 }
 
 .island-wrapper--edge-left .island-panel,
 .island-wrapper--edge-right .island-panel {
   width: min(360px, calc(100vw - 58px));
   max-height: calc(100vh - 20px);
+}
+
+.island-panel--open {
+  opacity: 1;
+  max-height: min(520px, calc(100vh - 20px));
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 .island-panel__header {
