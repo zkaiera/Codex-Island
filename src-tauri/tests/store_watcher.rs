@@ -5,7 +5,9 @@ use codex_island_lib::store::{
     mark_stale, should_display_session, should_show_again, sort_sessions, HiddenSession,
     SessionStore,
 };
-use codex_island_lib::watcher::{load_sessions_from_dir, load_sessions_with_codex_logs};
+use codex_island_lib::watcher::{
+    load_sessions_from_dir, load_sessions_with_codex_logs, refresh_store_from_disk,
+};
 
 #[test]
 fn sessions_are_sorted_by_created_at() {
@@ -208,6 +210,92 @@ fn newer_codex_log_activity_refreshes_completed_status_file() {
     assert_eq!(refreshed.ui_state, UiState::Running);
     assert_eq!(refreshed.last_event, HookEvent::UserPromptSubmit);
     assert!(refreshed.updated_at > completed.updated_at);
+}
+
+#[test]
+fn refresh_store_from_disk_picks_up_status_file_changes() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let now = Utc::now();
+    let running = SessionRecord::new(
+        "same-session".into(),
+        "/work/a".into(),
+        Source::Windows,
+        None,
+    )
+    .with_created_at(now - Duration::minutes(20))
+    .with_updated_at(now - Duration::minutes(5))
+    .with_ui_state(UiState::Running);
+    write_status_file(state_dir.path(), &running);
+
+    let store = std::sync::Arc::new(std::sync::RwLock::new(SessionStore::default()));
+    refresh_store_from_disk(&store, state_dir.path());
+    assert_eq!(session_state(&store, "same-session"), UiState::Running);
+
+    let completed = running
+        .clone()
+        .with_ui_state(UiState::Completed)
+        .with_updated_at(now - Duration::seconds(30));
+    write_status_file(state_dir.path(), &completed);
+
+    refresh_store_from_disk(&store, state_dir.path());
+
+    assert_eq!(session_state(&store, "same-session"), UiState::Completed);
+}
+
+#[test]
+fn refresh_store_from_disk_unhides_session_after_new_activity() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let hidden_at = Utc::now();
+    let old_activity = SessionRecord::new(
+        "hidden-session".into(),
+        "/work/a".into(),
+        Source::Windows,
+        None,
+    )
+    .with_created_at(hidden_at - Duration::minutes(20))
+    .with_updated_at(hidden_at - Duration::minutes(1));
+    write_status_file(state_dir.path(), &old_activity);
+
+    let store = std::sync::Arc::new(std::sync::RwLock::new(SessionStore::default()));
+    refresh_store_from_disk(&store, state_dir.path());
+    {
+        let mut guard = store.write().unwrap();
+        guard.hide("hidden-session", hidden_at);
+    }
+
+    let new_activity = old_activity.with_updated_at(hidden_at + Duration::seconds(30));
+    write_status_file(state_dir.path(), &new_activity);
+
+    refresh_store_from_disk(&store, state_dir.path());
+
+    assert!(session_is_visible(&store, "hidden-session", hidden_at));
+}
+
+fn session_is_visible(
+    store: &std::sync::Arc<std::sync::RwLock<SessionStore>>,
+    session_id: &str,
+    now: chrono::DateTime<Utc>,
+) -> bool {
+    store
+        .read()
+        .unwrap()
+        .recompute_visible(now)
+        .into_iter()
+        .any(|session| session.session_id == session_id)
+}
+
+fn session_state(
+    store: &std::sync::Arc<std::sync::RwLock<SessionStore>>,
+    session_id: &str,
+) -> UiState {
+    store
+        .read()
+        .unwrap()
+        .sessions()
+        .into_iter()
+        .find(|session| session.session_id == session_id)
+        .unwrap()
+        .ui_state
 }
 
 fn write_status_file(dir: &std::path::Path, record: &SessionRecord) {

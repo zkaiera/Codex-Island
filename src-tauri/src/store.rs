@@ -76,10 +76,10 @@ impl SessionStore {
     }
 
     pub fn replace_all(&mut self, sessions: Vec<SessionRecord>) {
-        self.sessions = sessions
-            .into_iter()
-            .map(|session| (session.session_id.clone(), session))
-            .collect();
+        self.sessions.clear();
+        for session in sessions {
+            self.upsert(session);
+        }
     }
 
     pub fn sessions(&self) -> Vec<SessionRecord> {

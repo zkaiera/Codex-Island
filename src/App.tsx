@@ -16,6 +16,7 @@ type BackendSession = {
 };
 
 const SESSIONS_CHANGED_EVENT = "sessions:changed";
+const SESSION_POLL_MS = 2000;
 type SnapEdge = "top" | "left" | "right";
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
     let unlisten: null | (() => void) = null;
+    let pollTimer: number | null = null;
 
     function applySessions(nextBackendSessions: BackendSession[]) {
       const nextSessions = nextBackendSessions.map(mapSession);
@@ -63,12 +65,27 @@ export default function App() {
       } catch {
         // 普通浏览器预览没有 Tauri 后端。
       }
+
+      pollTimer = window.setInterval(() => {
+        void invoke<BackendSession[]>("get_sessions")
+          .then((currentSessions) => {
+            if (!disposed) {
+              applySessions(currentSessions);
+            }
+          })
+          .catch(() => {
+            // 普通浏览器预览没有 Tauri 后端。
+          });
+      }, SESSION_POLL_MS);
     }
 
     void connect();
 
     return () => {
       disposed = true;
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+      }
       unlisten?.();
     };
   }, []);

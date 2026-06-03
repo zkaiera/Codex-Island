@@ -29,6 +29,7 @@ fn hide_session(
 
 #[tauri::command]
 fn get_sessions(state: tauri::State<'_, state::AppState>) -> Vec<SessionRecord> {
+    watcher::refresh_store_from_disk(&state.store, &paths::default_state_dir());
     let store = state.store.read().expect("session store poisoned");
     store.recompute_visible(chrono::Utc::now())
 }

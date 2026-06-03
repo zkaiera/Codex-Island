@@ -100,13 +100,22 @@ pub fn load_sessions_with_codex_logs(
     merge_sessions_with_codex_logs(sessions, codex_session_roots, now)
 }
 
-fn load_sessions_with_default_codex_logs(
+pub fn load_sessions_with_default_codex_logs(
     state_dir: &Path,
     now: chrono::DateTime<Utc>,
 ) -> Vec<SessionRecord> {
     let sessions = load_sessions_from_dir(state_dir);
     let codex_session_roots = default_codex_session_roots(&sessions);
     merge_sessions_with_codex_logs(sessions, &codex_session_roots, now)
+}
+
+pub fn refresh_store_from_disk(
+    store: &std::sync::Arc<std::sync::RwLock<SessionStore>>,
+    state_dir: &Path,
+) {
+    let sessions = load_sessions_with_default_codex_logs(state_dir, Utc::now());
+    let mut guard = store.write().expect("session store poisoned");
+    guard.replace_all(sessions);
 }
 
 pub fn emit_visible_sessions<R: Runtime>(
@@ -146,11 +155,7 @@ fn reload_sessions<R: Runtime>(
     store: &std::sync::Arc<std::sync::RwLock<SessionStore>>,
     state_dir: &Path,
 ) {
-    let sessions = load_sessions_with_default_codex_logs(state_dir, Utc::now());
-    {
-        let mut guard = store.write().expect("session store poisoned");
-        guard.replace_all(sessions);
-    }
+    refresh_store_from_disk(store, state_dir);
     emit_visible_sessions(app, store);
 }
 

@@ -124,14 +124,10 @@ body {
 
 .island-wrapper--edge-left .island {
   transform-origin: left center;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
 }
 
 .island-wrapper--edge-right .island {
   transform-origin: right center;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
 }
 
 .island-wrapper--dragging .island {

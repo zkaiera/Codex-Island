@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../App";
 
@@ -39,6 +39,10 @@ describe("App", () => {
     listenMock.mockReset();
     listenMock.mockRejectedValue(new Error("not running in Tauri"));
     window.history.pushState({}, "", "/");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders an idle island when no session state exists", () => {
@@ -114,5 +118,58 @@ describe("App", () => {
     fireEvent.click(hideButton);
 
     expect(await screen.findByText("web3-agent-research")).toBeInTheDocument();
+  });
+
+  it("polls backend sessions when no change event arrives", async () => {
+    vi.useFakeTimers();
+    listenMock.mockResolvedValue(() => undefined);
+    let getSessionsCalls = 0;
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "set_window_mode") {
+        return Promise.resolve();
+      }
+
+      if (command === "get_sessions") {
+        getSessionsCalls += 1;
+        return Promise.resolve([
+          {
+            session_id: "polling-session",
+            title: "polling-project",
+            source: "windows",
+            ui_state: getSessionsCalls === 1 ? "running" : "completed",
+            created_at: "2026-06-03T10:00:00Z",
+            updated_at:
+              getSessionsCalls === 1
+                ? "2026-06-03T10:01:00Z"
+                : "2026-06-03T10:02:00Z",
+          },
+        ]);
+      }
+
+      if (command === "snap_window") {
+        return Promise.resolve("top");
+      }
+
+      return Promise.reject(new Error("not running in Tauri"));
+    });
+
+    render(<App />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.pointerEnter(screen.getByLabelText("Codex Island", { selector: ".island" }).parentElement!);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(screen.getByText(/运行中/)).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2200);
+    });
+
+    expect(screen.getByText(/已完成/)).toBeInTheDocument();
+    expect(getSessionsCalls).toBeGreaterThanOrEqual(2);
   });
 });

@@ -182,12 +182,9 @@ pub fn initial_position_for_layout(
             clamp(centered_x, work_area.x, max_x),
             work_area.y - next.height / 2,
         ),
-        SnapEdge::Left => (
-            work_area.x - next.width / 2,
-            clamp(centered_y, work_area.y, max_y),
-        ),
+        SnapEdge::Left => (work_area.x, clamp(centered_y, work_area.y, max_y)),
         SnapEdge::Right => (
-            work_area.x + work_area.width - next.width / 2,
+            work_area.x + work_area.width - next.width,
             clamp(centered_y, work_area.y, max_y),
         ),
     }
@@ -210,11 +207,11 @@ pub fn docked_position(
             work_area.y - next.height / 2,
         ),
         SnapEdge::Left => (
-            work_area.x - next.width / 2,
+            work_area.x,
             clamp(current_center_y - next.height / 2, work_area.y, max_y),
         ),
         SnapEdge::Right => (
-            work_area.x + work_area.width - next.width / 2,
+            work_area.x + work_area.width - next.width,
             clamp(current_center_y - next.height / 2, work_area.y, max_y),
         ),
     }

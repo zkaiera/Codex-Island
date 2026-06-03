@@ -43,8 +43,35 @@ fn snaps_to_the_nearest_right_edge_and_clamps_y() {
     assert_eq!(nearest_edge(window, work_area), SnapEdge::Right);
     assert_eq!(
         snapped_position(window, work_area, SnapEdge::Right),
-        (1898, 860)
+        (1876, 860)
     );
+}
+
+#[test]
+fn side_collapsed_layout_stays_fully_inside_screen() {
+    let work_area = Rect {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+    };
+    let current = WindowFrame {
+        x: 80,
+        y: 430,
+        width: 44,
+        height: 220,
+    };
+    let layout = layout_for(WindowMode::Island, SnapEdge::Left);
+
+    assert_eq!(
+        snapped_position(current, work_area, SnapEdge::Left),
+        (0, 430)
+    );
+    assert_eq!(
+        snapped_position(current, work_area, SnapEdge::Right),
+        (1876, 430)
+    );
+    assert_eq!(layout.width, 44);
 }
 
 #[test]
