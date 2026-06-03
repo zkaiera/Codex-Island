@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 pub const APP_DIR_NAME: &str = "CodexIsland";
+pub const INSTALL_DIR_NAME: &str = "Codex Island";
 pub const SESSIONS_DIR_NAME: &str = "sessions";
 pub const BIN_DIR_NAME: &str = "bin";
 
@@ -9,6 +10,7 @@ pub fn default_state_dir() -> PathBuf {
         std::env::var_os("CODEX_ISLAND_STATE_DIR").map(PathBuf::from),
         std::env::var_os("LOCALAPPDATA").map(PathBuf::from),
         std::env::var_os("USERPROFILE").map(PathBuf::from),
+        std::env::current_exe().ok(),
         Some(Path::new("/mnt/c/Users")),
     )
 }
@@ -31,6 +33,7 @@ pub fn choose_state_dir(
     configured_state_dir: Option<PathBuf>,
     local_app_data: Option<PathBuf>,
     user_profile: Option<PathBuf>,
+    current_exe: Option<PathBuf>,
     wsl_users_root: Option<&Path>,
 ) -> PathBuf {
     if let Some(path) = configured_state_dir {
@@ -49,6 +52,10 @@ pub fn choose_state_dir(
             .join(SESSIONS_DIR_NAME);
     }
 
+    if let Some(path) = local_app_data_from_installed_exe(current_exe.as_deref()) {
+        return path.join(APP_DIR_NAME).join(SESSIONS_DIR_NAME);
+    }
+
     if let Some(path) = windows_local_app_data_from_wsl(wsl_users_root) {
         return path.join(APP_DIR_NAME).join(SESSIONS_DIR_NAME);
     }
@@ -56,6 +63,15 @@ pub fn choose_state_dir(
     std::env::temp_dir()
         .join(APP_DIR_NAME)
         .join(SESSIONS_DIR_NAME)
+}
+
+fn local_app_data_from_installed_exe(current_exe: Option<&Path>) -> Option<PathBuf> {
+    let install_dir = current_exe?.parent()?;
+    if install_dir.file_name().and_then(|value| value.to_str()) != Some(INSTALL_DIR_NAME) {
+        return None;
+    }
+
+    install_dir.parent().map(Path::to_path_buf)
 }
 
 fn windows_local_app_data_from_wsl(users_root: Option<&Path>) -> Option<PathBuf> {
@@ -115,8 +131,23 @@ mod tests {
         std::fs::create_dir_all(default_user).unwrap();
         std::fs::create_dir_all(wsi_account).unwrap();
 
-        let result = choose_state_dir(None, None, None, Some(users.path()));
+        let result = choose_state_dir(None, None, None, None, Some(users.path()));
 
         assert_eq!(result, real_user.join(APP_DIR_NAME).join(SESSIONS_DIR_NAME));
+    }
+
+    #[test]
+    fn state_dir_can_be_inferred_from_installed_hook_path() {
+        let local_app_data = PathBuf::from(r"C:\Users\15566\AppData\Local");
+        let current_exe = local_app_data
+            .join(INSTALL_DIR_NAME)
+            .join("codex-island-hook.exe");
+
+        let result = choose_state_dir(None, None, None, Some(current_exe), None);
+
+        assert_eq!(
+            result,
+            local_app_data.join(APP_DIR_NAME).join(SESSIONS_DIR_NAME)
+        );
     }
 }
