@@ -19,10 +19,7 @@ fn snaps_to_the_nearest_top_edge() {
     };
 
     assert_eq!(nearest_edge(window, work_area), SnapEdge::Top);
-    assert_eq!(
-        snapped_position(window, work_area, SnapEdge::Top),
-        (860, -22)
-    );
+    assert_eq!(snapped_position(window, work_area, SnapEdge::Top), (860, 0));
 }
 
 #[test]
@@ -86,7 +83,7 @@ fn initial_top_layout_is_centered_on_the_work_area() {
 
     assert_eq!(
         initial_position_for_layout(work_area, layout, SnapEdge::Top),
-        (850, -22)
+        (850, 0)
     );
 }
 

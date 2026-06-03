@@ -178,10 +178,7 @@ pub fn initial_position_for_layout(
     let max_y = work_area.y + work_area.height - next.height;
 
     match edge {
-        SnapEdge::Top => (
-            clamp(centered_x, work_area.x, max_x),
-            work_area.y - next.height / 2,
-        ),
+        SnapEdge::Top => (clamp(centered_x, work_area.x, max_x), work_area.y),
         SnapEdge::Left => (work_area.x, clamp(centered_y, work_area.y, max_y)),
         SnapEdge::Right => (
             work_area.x + work_area.width - next.width,
@@ -204,7 +201,7 @@ pub fn docked_position(
     match edge {
         SnapEdge::Top => (
             clamp(current_center_x - next.width / 2, work_area.x, max_x),
-            work_area.y - next.height / 2,
+            work_area.y,
         ),
         SnapEdge::Left => (
             work_area.x,
