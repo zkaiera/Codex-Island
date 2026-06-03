@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../App";
 
-const { invokeMock } = vi.hoisted(() => ({
+const { invokeMock, listenMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
+  listenMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -12,7 +13,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn().mockRejectedValue(new Error("not running in Tauri")),
+  listen: listenMock,
 }));
 
 describe("App", () => {
@@ -25,6 +26,8 @@ describe("App", () => {
 
       return Promise.reject(new Error("not running in Tauri"));
     });
+    listenMock.mockReset();
+    listenMock.mockRejectedValue(new Error("not running in Tauri"));
     window.history.pushState({}, "", "/");
   });
 
@@ -35,6 +38,36 @@ describe("App", () => {
     expect(screen.queryByText("Codex Island 设置")).not.toBeInTheDocument();
     expect(screen.queryByText(/自动配置/)).not.toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("set_window_mode", { mode: "island" });
+  });
+
+  it("loads existing sessions after registering the backend listener", async () => {
+    listenMock.mockResolvedValue(() => undefined);
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "set_window_mode") {
+        return Promise.resolve();
+      }
+
+      if (command === "get_sessions") {
+        return Promise.resolve([
+          {
+            session_id: "existing-session",
+            title: "existing-project",
+            source: "wsl",
+            ui_state: "running",
+            created_at: "2026-06-03T10:00:00Z",
+            updated_at: "2026-06-03T10:01:00Z",
+          },
+        ]);
+      }
+
+      return Promise.reject(new Error("not running in Tauri"));
+    });
+
+    render(<App />);
+    fireEvent.mouseEnter(screen.getAllByLabelText("Codex Island")[1]);
+
+    expect(await screen.findByText("existing-project")).toBeInTheDocument();
+    expect(listenMock).toHaveBeenCalledWith("sessions:changed", expect.any(Function));
   });
 
   it("opens demo island directly from demo query", () => {

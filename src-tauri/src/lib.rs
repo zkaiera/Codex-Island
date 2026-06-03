@@ -1,5 +1,7 @@
 use tauri::{LogicalSize, Manager};
 
+use crate::domain::SessionRecord;
+
 pub mod domain;
 pub mod hook;
 pub mod paths;
@@ -15,6 +17,12 @@ fn hide_session(session_id: String, state: tauri::State<'_, state::AppState>, ap
         store.hide(&session_id, chrono::Utc::now());
     }
     watcher::emit_visible_sessions(&app, &state.store);
+}
+
+#[tauri::command]
+fn get_sessions(state: tauri::State<'_, state::AppState>) -> Vec<SessionRecord> {
+    let store = state.store.read().expect("session store poisoned");
+    store.recompute_visible(chrono::Utc::now())
 }
 
 #[tauri::command]
@@ -37,7 +45,7 @@ fn set_window_mode(mode: String, app: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
-        .invoke_handler(tauri::generate_handler![hide_session, set_window_mode])
+        .invoke_handler(tauri::generate_handler![get_sessions, hide_session, set_window_mode])
         .setup(|app| {
             let app_state = app.state::<state::AppState>();
             let watcher = watcher::start_session_sync(

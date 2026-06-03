@@ -28,6 +28,16 @@ export default function App() {
     let disposed = false;
     let unlisten: null | (() => void) = null;
 
+    function applySessions(nextBackendSessions: BackendSession[]) {
+      const nextSessions = nextBackendSessions.map(mapSession);
+      setSessions(nextSessions);
+      setOptimisticallyHidden((current) => {
+        const next = new Set(current);
+        nextSessions.forEach((session) => next.delete(session.sessionId));
+        return next;
+      });
+    }
+
     async function connect() {
       try {
         unlisten = await listen<BackendSession[]>(SESSIONS_CHANGED_EVENT, (event) => {
@@ -35,16 +45,19 @@ export default function App() {
             return;
           }
 
-          const nextSessions = event.payload.map(mapSession);
-          setSessions(nextSessions);
-          setOptimisticallyHidden((current) => {
-            const next = new Set(current);
-            nextSessions.forEach((session) => next.delete(session.sessionId));
-            return next;
-          });
+          applySessions(event.payload);
         });
       } catch {
         // Running in a browser build is valid during development and tests.
+      }
+
+      try {
+        const currentSessions = await invoke<BackendSession[]>("get_sessions");
+        if (!disposed) {
+          applySessions(currentSessions);
+        }
+      } catch {
+        // 普通浏览器预览没有 Tauri 后端。
       }
     }
 
