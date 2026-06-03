@@ -92,7 +92,7 @@ pub fn load_sessions_from_dir(state_dir: &Path) -> Vec<SessionRecord> {
     sessions
 }
 
-fn emit_visible_sessions<R: Runtime>(
+pub fn emit_visible_sessions<R: Runtime>(
     app: &AppHandle<R>,
     store: &std::sync::Arc<std::sync::RwLock<SessionStore>>,
 ) {
