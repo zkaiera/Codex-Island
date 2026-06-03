@@ -24,6 +24,22 @@ type SetupSnippets = {
   state_dir: string;
 };
 
+type HookInstallStatus = "installed" | "already_installed" | "unavailable" | "failed";
+
+type HookInstallTargetReport = {
+  label: string;
+  status: HookInstallStatus;
+  path: string | null;
+  backup_path: string | null;
+  message: string;
+};
+
+export type HookInstallReport = {
+  windows: HookInstallTargetReport;
+  wsl: HookInstallTargetReport;
+  trust_steps: string[];
+};
+
 export default function App() {
   const [sessions, setSessions] = useState<SessionView[]>(() =>
     new URLSearchParams(window.location.search).get("demo") === "1" ? demoSessions : [],
@@ -31,6 +47,9 @@ export default function App() {
   const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(new Set());
   const [setupSnippets, setSetupSnippets] = useState<SetupSnippets | null>(null);
   const [isBrowserPreview, setIsBrowserPreview] = useState(false);
+  const [isInstallingHooks, setIsInstallingHooks] = useState(false);
+  const [hookInstallReport, setHookInstallReport] = useState<HookInstallReport | null>(null);
+  const [hookInstallError, setHookInstallError] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -86,6 +105,13 @@ export default function App() {
     [optimisticallyHidden, sessions],
   );
 
+  useEffect(() => {
+    const mode = visibleSessions.length > 0 ? "island" : "setup";
+    void invoke("set_window_mode", { mode }).catch(() => {
+      // 普通浏览器预览没有 Tauri 窗口。
+    });
+  }, [visibleSessions.length]);
+
   async function handleHide(sessionId: string) {
     setOptimisticallyHidden((current) => {
       const next = new Set(current);
@@ -101,6 +127,20 @@ export default function App() {
         next.delete(sessionId);
         return next;
       });
+    }
+  }
+
+  async function handleInstallHooks() {
+    setIsInstallingHooks(true);
+    setHookInstallError(null);
+
+    try {
+      const report = await invoke<HookInstallReport>("install_hooks");
+      setHookInstallReport(report);
+    } catch (error) {
+      setHookInstallError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsInstallingHooks(false);
     }
   }
 
@@ -120,6 +160,10 @@ export default function App() {
           }
           stateDir={setupSnippets?.state_dir ?? "普通网页预览无法读取本机状态目录。"}
           isBrowserPreview={isBrowserPreview}
+          isInstallingHooks={isInstallingHooks}
+          hookInstallReport={hookInstallReport}
+          hookInstallError={hookInstallError}
+          onInstallHooks={handleInstallHooks}
           onPreviewDemo={() => {
             setOptimisticallyHidden(new Set());
             setSessions(demoSessions);

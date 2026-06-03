@@ -1,4 +1,4 @@
-use tauri::Manager;
+use tauri::{LogicalSize, Manager};
 
 pub mod domain;
 pub mod hook;
@@ -23,11 +23,36 @@ fn get_setup_snippets() -> install::SetupSnippets {
     install::current_setup_snippets()
 }
 
+#[tauri::command]
+fn install_hooks() -> install::HookInstallReport {
+    install::install_codex_hooks()
+}
+
+#[tauri::command]
+fn set_window_mode(mode: String, app: tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+
+    let size = if mode == "setup" {
+        LogicalSize::new(760.0, 720.0)
+    } else {
+        LogicalSize::new(640.0, 120.0)
+    };
+
+    let _ = window.set_size(size);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
-        .invoke_handler(tauri::generate_handler![hide_session, get_setup_snippets])
+        .invoke_handler(tauri::generate_handler![
+            hide_session,
+            get_setup_snippets,
+            install_hooks,
+            set_window_mode
+        ])
         .setup(|app| {
             let app_state = app.state::<state::AppState>();
             let watcher = watcher::start_session_sync(

@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc --noEmit && vite build",
+    "build:sidecar:windows": "node scripts/build-windows-sidecar.mjs",
+    "bundle:windows": "pnpm build:sidecar:windows && pnpm tauri build --target x86_64-pc-windows-msvc",
+    "bundle:windows:wsl": "pnpm build:sidecar:windows && pnpm tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc",
     "test": "vitest run --passWithNoTests",
     "tauri": "tauri"
   },

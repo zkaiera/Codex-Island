@@ -102,6 +102,28 @@ body {
   background: rgb(59 156 255 / 20%);
 }
 
+.setup-panel__install {
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgb(104 211 145 / 35%);
+  border-radius: 8px;
+  background: rgb(104 211 145 / 12%);
+  color: #d8ffe7;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.setup-panel__install:hover:not(:disabled) {
+  background: rgb(104 211 145 / 20%);
+}
+
+.setup-panel__install:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .setup-panel__section {
   display: flex;
   flex-direction: column;
@@ -131,6 +153,75 @@ body {
   color: #f5f7fb;
   font: 12px/1.5 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   resize: vertical;
+}
+
+.setup-panel__result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.setup-panel__result--failed {
+  border-color: rgb(255 89 89 / 35%);
+  color: #ffb8b8;
+}
+
+.setup-panel__target {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  background: rgb(10 14 18 / 72%);
+}
+
+.setup-panel__target--installed,
+.setup-panel__target--already_installed {
+  border-color: rgb(104 211 145 / 22%);
+}
+
+.setup-panel__target--unavailable,
+.setup-panel__target--failed {
+  border-color: rgb(255 191 56 / 24%);
+}
+
+.setup-panel__target-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #f6f8ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.setup-panel__target p {
+  margin: 0;
+  color: #a7b0bd;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.setup-panel__target code {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 6%);
+  color: #d8ecff;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.setup-panel__trust ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: #cad1da;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .island-wrapper {
