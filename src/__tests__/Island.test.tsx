@@ -1,13 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Island } from "../components/Island";
 import type { SessionView } from "../components/session";
 
-const { invokeMock, outerPositionMock, setPositionMock } = vi.hoisted(() => ({
+const { invokeMock, startDraggingMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
-  outerPositionMock: vi.fn(),
-  setPositionMock: vi.fn(),
+  startDraggingMock: vi.fn(),
 }));
 
 const setPointerCaptureMock = vi.fn();
@@ -17,18 +16,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
-  PhysicalPosition: class PhysicalPosition {
-    x: number;
-    y: number;
-
-    constructor(x: number, y: number) {
-      this.x = x;
-      this.y = y;
-    }
-  },
   getCurrentWindow: () => ({
-    outerPosition: outerPositionMock,
-    setPosition: setPositionMock,
+    startDragging: startDraggingMock,
   }),
 }));
 
@@ -45,9 +34,8 @@ describe("Island", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockRejectedValue(new Error("not running in Tauri"));
-    outerPositionMock.mockReset();
-    outerPositionMock.mockResolvedValue({ x: 100, y: 100 });
-    setPositionMock.mockReset();
+    startDraggingMock.mockReset();
+    startDraggingMock.mockResolvedValue(undefined);
     setPointerCaptureMock.mockReset();
     Object.defineProperty(Element.prototype, "setPointerCapture", {
       configurable: true,
@@ -106,7 +94,7 @@ describe("Island", () => {
     expect(onExpandedChange).toHaveBeenCalledWith(false);
   });
 
-  it("drags by updating the window position and reports the snapped edge", async () => {
+  it("drags through the native window API and reports the snapped edge", async () => {
     invokeMock.mockResolvedValue("left");
     const onSnapEdgeChange = vi.fn();
 
@@ -128,21 +116,10 @@ describe("Island", () => {
       screenY: 100,
     });
     await Promise.resolve();
-    fireEvent.pointerMove(islandWrapper, {
-      pointerId: 1,
-      pointerType: "mouse",
-      screenX: 135,
-      screenY: 120,
-    });
-    fireEvent.pointerUp(islandWrapper, {
-      pointerId: 1,
-      pointerType: "mouse",
-    });
-    await Promise.resolve();
 
     expect(setPointerCaptureMock).toHaveBeenCalledWith(1);
-    expect(setPositionMock).toHaveBeenCalled();
+    expect(startDraggingMock).toHaveBeenCalled();
     expect(invokeMock).toHaveBeenCalledWith("snap_window");
-    expect(onSnapEdgeChange).toHaveBeenCalledWith("left");
+    await waitFor(() => expect(onSnapEdgeChange).toHaveBeenCalledWith("left"));
   });
 });

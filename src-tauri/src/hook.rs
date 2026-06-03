@@ -51,8 +51,8 @@ pub fn parse_and_build_record(
     let parsed: HookPayload = serde_json::from_str(payload)?;
     let event = parse_hook_event(&parsed.hook_event_name);
     let source = infer_source_from_payload(&parsed.cwd, source, distro.as_deref());
-    let mut record = SessionRecord::new(parsed.session_id, parsed.cwd, source, distro)
-        .with_event(event);
+    let mut record =
+        SessionRecord::new(parsed.session_id, parsed.cwd, source, distro).with_event(event);
     record.turn_id = parsed.turn_id;
     record.last_tool = parsed.tool_name;
 
@@ -94,15 +94,22 @@ fn atomic_write(path: &Path, body: &str) -> io::Result<()> {
 }
 
 fn parse_hook_event(name: &str) -> HookEvent {
-    match name {
-        "SessionStart" => HookEvent::SessionStart,
-        "UserPromptSubmit" => HookEvent::UserPromptSubmit,
-        "PermissionRequest" => HookEvent::PermissionRequest,
-        "PreToolUse" => HookEvent::PreToolUse,
-        "PostToolUse" => HookEvent::PostToolUse,
-        "Stop" => HookEvent::Stop,
+    match normalize_hook_event_name(name).as_str() {
+        "sessionstart" => HookEvent::SessionStart,
+        "userpromptsubmit" => HookEvent::UserPromptSubmit,
+        "permissionrequest" => HookEvent::PermissionRequest,
+        "pretooluse" => HookEvent::PreToolUse,
+        "posttooluse" => HookEvent::PostToolUse,
+        "stop" => HookEvent::Stop,
         _ => HookEvent::SessionStart,
     }
+}
+
+fn normalize_hook_event_name(name: &str) -> String {
+    name.chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(|character| character.to_lowercase())
+        .collect()
 }
 
 fn infer_source_from_payload(cwd: &str, fallback: Source, distro: Option<&str>) -> Source {

@@ -4,6 +4,7 @@ use codex_island_lib::store::{
     mark_stale, should_display_session, should_show_again, sort_sessions, HiddenSession,
     SessionStore,
 };
+use codex_island_lib::watcher::load_sessions_from_dir;
 
 #[test]
 fn sessions_are_sorted_by_created_at() {
@@ -110,14 +111,28 @@ fn stale_sessions_are_kept_for_eight_hours_after_last_update() {
 #[test]
 fn completed_sessions_drop_out_after_ten_minutes() {
     let now = Utc.with_ymd_and_hms(2026, 6, 3, 18, 0, 0).unwrap();
-    let completed = SessionRecord::new(
-        "done".into(),
-        "/work/done".into(),
-        Source::Windows,
-        None,
-    )
-    .with_updated_at(now - Duration::minutes(11))
-    .with_ui_state(UiState::Completed);
+    let completed = SessionRecord::new("done".into(), "/work/done".into(), Source::Windows, None)
+        .with_updated_at(now - Duration::minutes(11))
+        .with_ui_state(UiState::Completed);
 
     assert!(!should_display_session(&completed, now));
+}
+
+#[test]
+fn smoke_status_files_are_ignored_when_loading_sessions() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = serde_json::to_string(&SessionRecord::new(
+        "codex-island-smoke-wsl-20260603".into(),
+        "/work/smoke".into(),
+        Source::Wsl,
+        Some("Ubuntu".into()),
+    ))
+    .unwrap();
+    std::fs::write(
+        dir.path().join("codex-island-smoke-wsl-20260603.json"),
+        body,
+    )
+    .unwrap();
+
+    assert!(load_sessions_from_dir(dir.path()).is_empty());
 }

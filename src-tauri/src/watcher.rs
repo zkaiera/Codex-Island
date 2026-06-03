@@ -55,8 +55,10 @@ pub fn start_session_sync<R: Runtime>(
         std::thread::spawn(move || {
             while output_rx.recv().is_ok() {
                 let sessions = load_sessions_from_dir(&reload_state_dir);
-                let mut guard = store.write().expect("session store poisoned");
-                guard.replace_all(sessions);
+                {
+                    let mut guard = store.write().expect("session store poisoned");
+                    guard.replace_all(sessions);
+                }
                 emit_visible_sessions(&app, &store);
             }
         });
@@ -109,8 +111,19 @@ fn load_session_file(path: &Path) -> Option<SessionRecord> {
         return None;
     }
 
+    if is_smoke_status_file(path) {
+        return None;
+    }
+
     let body = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&body).ok()
+}
+
+fn is_smoke_status_file(path: &Path) -> bool {
+    path.file_stem()
+        .and_then(|value| value.to_str())
+        .map(|stem| stem.starts_with("codex-island-smoke-"))
+        .unwrap_or(false)
 }
 
 fn debounce_loop(input_rx: Receiver<PathBuf>, output_tx: mpsc::Sender<PathBuf>) {

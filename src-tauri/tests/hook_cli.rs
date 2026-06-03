@@ -38,6 +38,20 @@ fn permission_request_maps_to_waiting() {
 }
 
 #[test]
+fn lowercase_permission_request_maps_to_waiting() {
+    let payload = r#"{
+        "session_id": "abc123",
+        "cwd": "/work/a",
+        "hook_event_name": "permission_request"
+    }"#;
+
+    let result = parse_and_build_record(payload, Source::Wsl, Some("Ubuntu".into())).unwrap();
+
+    assert_eq!(result.last_event, HookEvent::PermissionRequest);
+    assert_eq!(result.ui_state, UiState::Waiting);
+}
+
+#[test]
 fn posix_cwd_marks_windows_interop_hook_as_wsl() {
     let payload = r#"{
         "session_id": "abc123",

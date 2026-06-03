@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { SessionList } from "./SessionList";
 import { SessionPill } from "./SessionPill";
@@ -30,11 +30,6 @@ export function Island({
   const collapseTimer = useRef<number | null>(null);
   const expandTimer = useRef<number | null>(null);
   const expandedRef = useRef(expanded);
-  const dragState = useRef<{
-    pointerId: number;
-    startMouse: { x: number; y: number };
-    startPosition: { x: number; y: number } | null;
-  } | null>(null);
 
   const orderedSessions = useMemo(
     () =>
@@ -137,9 +132,10 @@ export function Island({
     }
 
     const pointerId = event.pointerId ?? 1;
+    const target = event.currentTarget;
     event.preventDefault();
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(pointerId);
+    target.setPointerCapture(pointerId);
     if (expandTimer.current !== null) {
       window.clearTimeout(expandTimer.current);
       expandTimer.current = null;
@@ -153,53 +149,21 @@ export function Island({
     setExpanded(false);
     onExpandedChange?.(false);
 
-    const appWindow = getCurrentWindow();
-    const startMouse = { x: event.screenX, y: event.screenY };
-
-    dragState.current = {
-      pointerId,
-      startMouse,
-      startPosition: null,
-    };
-
     try {
-      const startPosition = await appWindow.outerPosition();
-      if (!dragState.current || dragState.current.pointerId !== pointerId) {
-        return;
-      }
-      dragState.current.startPosition = startPosition;
+      await getCurrentWindow().startDragging();
+      await snapAfterDrag();
     } catch {
+      // 普通浏览器预览没有 Tauri 后端。
+    } finally {
+      if (target.hasPointerCapture?.(pointerId)) {
+        target.releasePointerCapture(pointerId);
+      }
       setDragging(false);
-      dragState.current = null;
-      return;
     }
   }
 
-  function handleDragMove(event: PointerEvent<HTMLDivElement>) {
-    const state = dragState.current;
-    const pointerId = event.pointerId ?? state?.pointerId;
-    if (!state || state.pointerId !== pointerId || !state.startPosition) {
-      return;
-    }
-
-    const nextX = state.startPosition.x + event.screenX - state.startMouse.x;
-    const nextY = state.startPosition.y + event.screenY - state.startMouse.y;
-    void getCurrentWindow().setPosition(new PhysicalPosition(nextX, nextY));
-  }
-
-  function handleDragEnd(event: PointerEvent<HTMLDivElement>) {
-    const state = dragState.current;
-    const pointerId = event.pointerId ?? state?.pointerId;
-    if (!state || state.pointerId !== pointerId) {
-      return;
-    }
-
-    if (event.currentTarget.hasPointerCapture?.(pointerId)) {
-      event.currentTarget.releasePointerCapture(pointerId);
-    }
-    dragState.current = null;
-    setDragging(false);
-    void invoke<SnapEdge>("snap_window")
+  async function snapAfterDrag() {
+    return invoke<SnapEdge>("snap_window")
       .then((edge) => {
         if (edge) {
           onSnapEdgeChange?.(edge);
@@ -222,9 +186,6 @@ export function Island({
         .join(" ")}
       data-tauri-drag-region="false"
       onPointerDown={handleDragStart}
-      onPointerMove={handleDragMove}
-      onPointerUp={handleDragEnd}
-      onPointerCancel={handleDragEnd}
       onPointerEnter={queueExpand}
       onPointerLeave={queueCollapse}
     >
