@@ -38,6 +38,20 @@ fn permission_request_maps_to_waiting() {
 }
 
 #[test]
+fn posix_cwd_marks_windows_interop_hook_as_wsl() {
+    let payload = r#"{
+        "session_id": "abc123",
+        "cwd": "/home/zkai/Projects/Codex Island",
+        "hook_event_name": "PreToolUse"
+    }"#;
+
+    let result = parse_and_build_record(payload, Source::Windows, None).unwrap();
+
+    assert_eq!(result.source, Source::Wsl);
+    assert_eq!(result.title, "Codex Island");
+}
+
+#[test]
 fn preserves_created_at_after_first_write() {
     let dir = tempfile::tempdir().unwrap();
     let first = parse_and_build_record(

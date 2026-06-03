@@ -2,7 +2,6 @@ use tauri::{LogicalSize, Manager};
 
 pub mod domain;
 pub mod hook;
-pub mod install;
 pub mod paths;
 pub mod state;
 pub mod store;
@@ -19,29 +18,18 @@ fn hide_session(session_id: String, state: tauri::State<'_, state::AppState>, ap
 }
 
 #[tauri::command]
-fn get_setup_snippets() -> install::SetupSnippets {
-    install::current_setup_snippets()
-}
-
-#[tauri::command]
-fn install_hooks() -> install::HookInstallReport {
-    install::install_codex_hooks()
-}
-
-#[tauri::command]
 fn set_window_mode(mode: String, app: tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
 
     let size = match mode.as_str() {
-        "setup" => LogicalSize::new(920.0, 760.0),
         "island_expanded" => LogicalSize::new(640.0, 420.0),
         _ => LogicalSize::new(640.0, 120.0),
     };
 
-    let _ = window.set_decorations(mode == "setup");
-    let _ = window.set_resizable(mode == "setup");
+    let _ = window.set_decorations(false);
+    let _ = window.set_resizable(false);
     let _ = window.set_size(size);
 }
 
@@ -49,12 +37,7 @@ fn set_window_mode(mode: String, app: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
-        .invoke_handler(tauri::generate_handler![
-            hide_session,
-            get_setup_snippets,
-            install_hooks,
-            set_window_mode
-        ])
+        .invoke_handler(tauri::generate_handler![hide_session, set_window_mode])
         .setup(|app| {
             let app_state = app.state::<state::AppState>();
             let watcher = watcher::start_session_sync(

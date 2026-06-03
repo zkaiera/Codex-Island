@@ -50,6 +50,7 @@ pub fn parse_and_build_record(
 ) -> Result<SessionRecord, HookError> {
     let parsed: HookPayload = serde_json::from_str(payload)?;
     let event = parse_hook_event(&parsed.hook_event_name);
+    let source = infer_source_from_payload(&parsed.cwd, source, distro.as_deref());
     let mut record = SessionRecord::new(parsed.session_id, parsed.cwd, source, distro)
         .with_event(event);
     record.turn_id = parsed.turn_id;
@@ -102,4 +103,20 @@ fn parse_hook_event(name: &str) -> HookEvent {
         "Stop" => HookEvent::Stop,
         _ => HookEvent::SessionStart,
     }
+}
+
+fn infer_source_from_payload(cwd: &str, fallback: Source, distro: Option<&str>) -> Source {
+    if distro.is_some() || looks_like_wsl_cwd(cwd) {
+        Source::Wsl
+    } else {
+        fallback
+    }
+}
+
+fn looks_like_wsl_cwd(cwd: &str) -> bool {
+    cwd.starts_with("/home/")
+        || cwd.starts_with("/mnt/")
+        || cwd.starts_with("/tmp/")
+        || cwd.starts_with("/work/")
+        || cwd.starts_with("/var/")
 }

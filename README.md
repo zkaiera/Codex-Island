@@ -8,7 +8,7 @@ Codex Island 是一个基于 Tauri 的 Windows 桌面悬浮状态岛，用来观
 - 用收起态呼吸灯展示会话状态。
 - 鼠标悬浮后展开会话列表。
 - 支持手动隐藏单个会话。
-- 支持 WSL 与 Windows 原生 Codex 的 hook 自动配置。
+- 支持 WSL 与 Windows 原生 Codex 写入的状态文件。
 
 ## 本地开发
 
@@ -84,22 +84,19 @@ CODEX_ISLAND_STATE_DIR
 
 每个会话一个 JSON 文件，文件名使用 `session_id`。
 
-## Windows 安装与 hook 配置
+## Windows 安装
 
 安装包生成后，双击 `Codex Island_*_x64-setup.exe` 安装。当前安装包使用当前用户安装模式，不要求管理员权限。
 
-首次打开应用时，如果还没有检测到会话状态文件，会显示设置面板：
+启动后应用只显示悬浮状态岛，并直接监听状态目录。没有状态文件时只显示空闲呼吸灯，不再提供设置流程或 hook 自动配置。
 
-1. 点击“自动配置 Windows 和 WSL hooks”。
-2. 应用会合并写入 Windows Codex 的 `%USERPROFILE%\.codex\hooks.json`。
-3. 应用会通过 `wsl.exe` 合并写入默认 WSL 发行版中的 `~/.codex/hooks.json`。
-4. 写入前会保留已有 hook，并把被修改的配置备份为 `hooks.json.codex-island.bak`。
-5. 新开或重启 Codex 会话。
-6. 当 Codex 提示 hook 需要信任时，手动选择信任或允许。
+hook 配置由用户手动维护。确保 Windows Codex 和 WSL Codex 的 hook 命令都指向安装目录中的：
 
-应用不会绕过 Codex 的 hook 信任机制，也不会使用 `--dangerously-bypass-hook-trust`。如果 WSL 未安装或 `wsl.exe` 不可用，Windows hooks 仍会照常配置，WSL 配置结果会显示为不可用。
+```text
+codex-island-hook.exe
+```
 
-设置面板仍保留 Windows 和 WSL hook 片段，便于你手动核对最终配置。
+WSL 中可以通过 `/mnt/c/.../codex-island-hook.exe` 调用同一个 Windows helper。Codex 的 hook 信任仍由 Codex 自身管理，需要你手动确认。
 
 ## 状态说明
 
