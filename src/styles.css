@@ -71,11 +71,13 @@ body {
 
 .island-wrapper--edge-left {
   align-items: flex-start;
+  flex-direction: row;
   --snap-surface-transform: translateX(-2px) scaleX(0.84) scaleY(1.12);
 }
 
 .island-wrapper--edge-right {
   align-items: flex-end;
+  flex-direction: row-reverse;
   --snap-surface-transform: translateX(2px) scaleX(0.84) scaleY(1.12);
 }
 
@@ -87,20 +89,30 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 96px;
+  min-width: 104px;
   min-height: 30px;
   padding: 6px 18px;
   border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgb(12 15 20 / 92%), rgb(5 7 11 / 96%));
+  background:
+    radial-gradient(circle at 22% 24%, rgb(80 140 255 / 12%), transparent 34%),
+    linear-gradient(180deg, rgb(12 15 20 / 94%), rgb(5 7 11 / 98%));
   box-shadow:
     0 16px 38px rgb(0 0 0 / 38%),
+    0 0 0 1px rgb(255 255 255 / 3%),
     inset 0 1px 0 rgb(255 255 255 / 10%);
   cursor: grab;
   transform-origin: top center;
   transition:
     border-radius 140ms ease,
     box-shadow 140ms ease;
+}
+
+.island-wrapper--edge-left .island,
+.island-wrapper--edge-right .island {
+  min-width: 30px;
+  min-height: 104px;
+  padding: 18px 6px;
 }
 
 .island-wrapper--edge-left .island {
@@ -115,10 +127,21 @@ body {
   animation: surface-tension 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+.island-wrapper--dragging .island {
+  cursor: grabbing;
+  transform: scale(0.96);
+}
+
 .island__pills {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.island-wrapper--edge-left .island__pills,
+.island-wrapper--edge-right .island__pills {
+  flex-direction: column;
+  gap: 10px;
 }
 
 .session-pill,
@@ -168,16 +191,23 @@ body {
 .island-panel {
   display: flex;
   flex-direction: column;
-  min-width: 280px;
-  max-width: min(560px, calc(100vw - 48px));
-  max-height: calc(100vh - 58px);
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 52px);
   border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgb(15 18 24 / 95%), rgb(7 9 12 / 97%));
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 18% 0%, rgb(74 146 255 / 10%), transparent 34%),
+    linear-gradient(180deg, rgb(15 18 24 / 96%), rgb(7 9 12 / 98%));
   box-shadow:
     0 20px 50px rgb(0 0 0 / 45%),
     inset 0 1px 0 rgb(255 255 255 / 8%);
   overflow: hidden;
+}
+
+.island-wrapper--edge-left .island-panel,
+.island-wrapper--edge-right .island-panel {
+  width: min(360px, calc(100vw - 58px));
+  max-height: calc(100vh - 20px);
 }
 
 .island-panel__header {
@@ -190,6 +220,28 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(151 160 174 / 58%) transparent;
+}
+
+.session-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.session-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.session-list::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgb(151 160 174 / 54%);
+  background-clip: padding-box;
+}
+
+.session-list::-webkit-scrollbar-thumb:hover {
+  background: rgb(198 205 216 / 72%);
+  background-clip: padding-box;
 }
 
 .session-list__row {

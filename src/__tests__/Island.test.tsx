@@ -1,13 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Island } from "../components/Island";
 import type { SessionView } from "../components/session";
 
-const { invokeMock, startDraggingMock } = vi.hoisted(() => ({
+const { invokeMock, outerPositionMock, setPositionMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
-  startDraggingMock: vi.fn(),
+  outerPositionMock: vi.fn(),
+  setPositionMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -15,8 +15,18 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
+  PhysicalPosition: class PhysicalPosition {
+    x: number;
+    y: number;
+
+    constructor(x: number, y: number) {
+      this.x = x;
+      this.y = y;
+    }
+  },
   getCurrentWindow: () => ({
-    startDragging: startDraggingMock,
+    outerPosition: outerPositionMock,
+    setPosition: setPositionMock,
   }),
 }));
 
@@ -33,8 +43,9 @@ describe("Island", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockRejectedValue(new Error("not running in Tauri"));
-    startDraggingMock.mockReset();
-    startDraggingMock.mockResolvedValue(undefined);
+    outerPositionMock.mockReset();
+    outerPositionMock.mockResolvedValue({ x: 100, y: 100 });
+    setPositionMock.mockReset();
     vi.useRealTimers();
   });
 
@@ -61,7 +72,7 @@ describe("Island", () => {
   });
 
   it("expands on hover and hides via callback", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers();
     const onHide = vi.fn();
     const onExpandedChange = vi.fn();
     const oneSession = makeSession("one", "2026-06-03T09:00:00.000Z");
@@ -79,15 +90,15 @@ describe("Island", () => {
     expect(screen.getByText(/运行中/)).toBeInTheDocument();
     expect(onExpandedChange).toHaveBeenCalledWith(true);
 
-    await user.click(screen.getByRole("button", { name: "隐藏 one-project" }));
+    fireEvent.click(screen.getByRole("button", { name: "隐藏 one-project" }));
     expect(onHide).toHaveBeenCalledWith("one");
 
     fireEvent.mouseLeave(screen.getByLabelText("Codex Island").parentElement!);
+    await vi.runAllTimersAsync();
     expect(onExpandedChange).toHaveBeenCalledWith(false);
   });
 
-  it("starts native dragging and reports the snapped edge", async () => {
-    vi.useFakeTimers();
+  it("drags by updating the window position and reports the snapped edge", async () => {
     invokeMock.mockResolvedValue("left");
     const onSnapEdgeChange = vi.fn();
 
@@ -100,9 +111,12 @@ describe("Island", () => {
     );
 
     fireEvent.mouseDown(screen.getByLabelText("Codex Island"), { button: 0 });
-    await vi.runAllTimersAsync();
+    await Promise.resolve();
+    fireEvent.mouseMove(window, { screenX: 135, screenY: 120 });
+    fireEvent.mouseUp(window);
+    await Promise.resolve();
 
-    expect(startDraggingMock).toHaveBeenCalled();
+    expect(setPositionMock).toHaveBeenCalled();
     expect(invokeMock).toHaveBeenCalledWith("snap_window");
     expect(onSnapEdgeChange).toHaveBeenCalledWith("left");
   });

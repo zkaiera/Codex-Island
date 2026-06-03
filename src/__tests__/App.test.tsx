@@ -47,7 +47,10 @@ describe("App", () => {
     expect(screen.getAllByLabelText("Codex Island")[1]).toBeInTheDocument();
     expect(screen.queryByText("Codex Island 设置")).not.toBeInTheDocument();
     expect(screen.queryByText(/自动配置/)).not.toBeInTheDocument();
-    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", { mode: "island" });
+    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+      mode: "island",
+      edge: "top",
+    });
   });
 
   it("loads existing sessions after registering the backend listener", async () => {
@@ -94,6 +97,7 @@ describe("App", () => {
     expect(screen.getByText("codex-island-ui")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
       mode: "island_expanded",
+      edge: "top",
     });
   });
 

@@ -1,4 +1,4 @@
-use tauri::{LogicalSize, Manager};
+use tauri::Manager;
 
 use crate::domain::SessionRecord;
 
@@ -34,19 +34,18 @@ fn snap_window(app: tauri::AppHandle) -> Option<windowing::SnapEdge> {
 }
 
 #[tauri::command]
-fn set_window_mode(mode: String, app: tauri::AppHandle) {
+fn set_window_mode(mode: String, edge: Option<windowing::SnapEdge>, app: tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
 
-    let size = match mode.as_str() {
-        "island_expanded" => LogicalSize::new(640.0, 420.0),
-        _ => LogicalSize::new(180.0, 48.0),
-    };
-
     let _ = window.set_decorations(false);
     let _ = window.set_resizable(false);
-    let _ = window.set_size(size);
+    let _ = windowing::apply_window_layout(
+        &app,
+        windowing::WindowMode::from_name(&mode),
+        edge.unwrap_or(windowing::SnapEdge::Top),
+    );
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
