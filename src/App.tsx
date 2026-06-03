@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 import { Island } from "./components/Island";
+import { SetupPanel } from "./components/SetupPanel";
 import type { SessionView } from "./components/session";
 
 type BackendSession = {
@@ -16,9 +17,16 @@ type BackendSession = {
 
 const SESSIONS_CHANGED_EVENT = "sessions:changed";
 
+type SetupSnippets = {
+  windows: string;
+  wsl: string;
+  state_dir: string;
+};
+
 export default function App() {
   const [sessions, setSessions] = useState<SessionView[]>([]);
   const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(new Set());
+  const [setupSnippets, setSetupSnippets] = useState<SetupSnippets | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -52,6 +60,21 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    async function loadSetupSnippets() {
+      try {
+        const snippets = await invoke<SetupSnippets>("get_setup_snippets");
+        setSetupSnippets(snippets);
+      } catch {
+        setSetupSnippets(null);
+      }
+    }
+
+    if (sessions.length === 0) {
+      void loadSetupSnippets();
+    }
+  }, [sessions.length]);
+
   const visibleSessions = useMemo(
     () => sessions.filter((session) => !optimisticallyHidden.has(session.sessionId)),
     [optimisticallyHidden, sessions],
@@ -77,7 +100,15 @@ export default function App() {
 
   return (
     <main className="app-shell" aria-label="Codex Island">
-      <Island sessions={visibleSessions} onHide={handleHide} />
+      {visibleSessions.length > 0 ? (
+        <Island sessions={visibleSessions} onHide={handleHide} />
+      ) : (
+        <SetupPanel
+          windowsSnippet={setupSnippets?.windows ?? "正在准备 Windows hooks 片段..."}
+          wslSnippet={setupSnippets?.wsl ?? "正在准备 WSL hooks 片段..."}
+          stateDir={setupSnippets?.state_dir ?? "正在读取状态目录..."}
+        />
+      )}
     </main>
   );
 }

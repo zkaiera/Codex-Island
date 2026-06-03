@@ -2,6 +2,7 @@ use tauri::Manager;
 
 pub mod domain;
 pub mod hook;
+pub mod install;
 pub mod paths;
 pub mod state;
 pub mod store;
@@ -17,11 +18,16 @@ fn hide_session(session_id: String, state: tauri::State<'_, state::AppState>, ap
     watcher::emit_visible_sessions(&app, &state.store);
 }
 
+#[tauri::command]
+fn get_setup_snippets() -> install::SetupSnippets {
+    install::current_setup_snippets()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
-        .invoke_handler(tauri::generate_handler![hide_session])
+        .invoke_handler(tauri::generate_handler![hide_session, get_setup_snippets])
         .setup(|app| {
             let app_state = app.state::<state::AppState>();
             let watcher = watcher::start_session_sync(
