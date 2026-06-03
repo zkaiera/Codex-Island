@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "A desktop status island for Codex sessions"
 authors = ["Codex Island"]
 edition = "2021"
+default-run = "codex-island"
 
 [lib]
 name = "codex_island_lib"
