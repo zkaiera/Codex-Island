@@ -34,12 +34,14 @@ fn set_window_mode(mode: String, app: tauri::AppHandle) {
         return;
     };
 
-    let size = if mode == "setup" {
-        LogicalSize::new(760.0, 720.0)
-    } else {
-        LogicalSize::new(640.0, 120.0)
+    let size = match mode.as_str() {
+        "setup" => LogicalSize::new(920.0, 760.0),
+        "island_expanded" => LogicalSize::new(640.0, 420.0),
+        _ => LogicalSize::new(640.0, 120.0),
     };
 
+    let _ = window.set_decorations(mode == "setup");
+    let _ = window.set_resizable(mode == "setup");
     let _ = window.set_size(size);
 }
 

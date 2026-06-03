@@ -40,15 +40,26 @@ describe("Island", () => {
   it("expands on hover and hides via callback", async () => {
     const user = userEvent.setup();
     const onHide = vi.fn();
+    const onExpandedChange = vi.fn();
     const oneSession = makeSession("one", "2026-06-03T09:00:00.000Z");
 
-    render(<Island sessions={[oneSession]} onHide={onHide} />);
+    render(
+      <Island
+        sessions={[oneSession]}
+        onHide={onHide}
+        onExpandedChange={onExpandedChange}
+      />,
+    );
 
     fireEvent.mouseEnter(screen.getByLabelText("Codex Island"));
     expect(screen.getByText("one-project")).toBeInTheDocument();
     expect(screen.getByText(/运行中/)).toBeInTheDocument();
+    expect(onExpandedChange).toHaveBeenCalledWith(true);
 
     await user.click(screen.getByRole("button", { name: "隐藏 one-project" }));
     expect(onHide).toHaveBeenCalledWith("one");
+
+    fireEvent.mouseLeave(screen.getByLabelText("Codex Island").parentElement!);
+    expect(onExpandedChange).toHaveBeenCalledWith(false);
   });
 });

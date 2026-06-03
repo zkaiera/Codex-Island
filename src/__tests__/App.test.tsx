@@ -18,7 +18,13 @@ vi.mock("@tauri-apps/api/event", () => ({
 describe("App browser preview", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    invokeMock.mockRejectedValue(new Error("not running in Tauri"));
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "set_window_mode") {
+        return Promise.resolve();
+      }
+
+      return Promise.reject(new Error("not running in Tauri"));
+    });
     window.history.pushState({}, "", "/");
   });
 
@@ -30,6 +36,9 @@ describe("App browser preview", () => {
 
     expect(screen.getByText("web3-agent-research")).toBeInTheDocument();
     expect(screen.getByText("codex-island-ui")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+      mode: "island_expanded",
+    });
   });
 
   it("shows an explicit browser-preview message when Tauri setup snippets are unavailable", async () => {
@@ -61,6 +70,10 @@ describe("App browser preview", () => {
           wsl: "wsl snippet",
           state_dir: "C:\\Users\\zk\\AppData\\Local\\CodexIsland\\sessions",
         });
+      }
+
+      if (command === "set_window_mode") {
+        return Promise.resolve();
       }
 
       if (command === "install_hooks") {

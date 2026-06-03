@@ -22,6 +22,20 @@ const HOOK_EVENTS: [&str; 6] = [
 const HOOK_TIMEOUT_SECONDS: u64 = 5;
 const HOOK_BINARY_STEM: &str = "codex-island-hook";
 const HOOKS_FILE_NAME: &str = "hooks.json";
+const WSL_WRITE_HOOKS_SCRIPT: &str = r#"set -eu
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+file="$codex_home/hooks.json"
+mkdir -p "$codex_home"
+backup=""
+if [ -f "$file" ]; then
+  backup="$file.codex-island.bak"
+  cp "$file" "$backup"
+fi
+tmp="$file.codex-island.tmp"
+cat > "$tmp"
+mv "$tmp" "$file"
+printf '%s' "$backup"
+"#;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SetupSnippets {
@@ -427,11 +441,7 @@ fn read_wsl_hooks_file() -> Result<Option<String>, std::io::Error> {
 
 fn write_wsl_hooks_file(body: &str) -> Result<Option<String>, std::io::Error> {
     let mut child = Command::new("wsl.exe")
-        .args([
-            "sh",
-            "-lc",
-            "set -eu; file=\"${CODEX_HOME:-$HOME/.codex}/hooks.json\"; mkdir -p \"$(dirname \"$file\")\"; backup=\"\"; if [ -f \"$file\" ]; then backup=\"$file.codex-island.bak\"; cp \"$file\" \"$backup\"; fi; tmp=\"$file.codex-island.tmp\"; cat > \"$tmp\"; mv \"$tmp\" \"$file\"; printf '%s' \"$backup\"",
-        ])
+        .args(["sh", "-c", WSL_WRITE_HOOKS_SCRIPT])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -485,6 +495,7 @@ mod tests {
 
     use super::{
         build_install_snippets, merge_hooks_config, to_wsl_path, HOOK_BINARY_STEM, HOOK_EVENTS,
+        WSL_WRITE_HOOKS_SCRIPT,
     };
 
     #[test]
@@ -598,5 +609,13 @@ mod tests {
             to_wsl_path("C:\\Program Files\\Codex Island\\codex-island-hook.exe"),
             "/mnt/c/Program Files/Codex Island/codex-island-hook.exe"
         );
+    }
+
+    #[test]
+    fn wsl_write_script_uses_codex_home_without_dirname_substitution() {
+        assert!(WSL_WRITE_HOOKS_SCRIPT.contains("codex_home="));
+        assert!(WSL_WRITE_HOOKS_SCRIPT.contains("mkdir -p \"$codex_home\""));
+        assert!(WSL_WRITE_HOOKS_SCRIPT.contains("cat > \"$tmp\""));
+        assert!(!WSL_WRITE_HOOKS_SCRIPT.contains("dirname"));
     }
 }

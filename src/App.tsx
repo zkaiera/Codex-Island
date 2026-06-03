@@ -50,6 +50,7 @@ export default function App() {
   const [isInstallingHooks, setIsInstallingHooks] = useState(false);
   const [hookInstallReport, setHookInstallReport] = useState<HookInstallReport | null>(null);
   const [hookInstallError, setHookInstallError] = useState<string | null>(null);
+  const [isIslandExpanded, setIsIslandExpanded] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -106,11 +107,17 @@ export default function App() {
   );
 
   useEffect(() => {
-    const mode = visibleSessions.length > 0 ? "island" : "setup";
+    const mode =
+      visibleSessions.length > 0
+        ? isIslandExpanded
+          ? "island_expanded"
+          : "island"
+        : "setup";
+
     void invoke("set_window_mode", { mode }).catch(() => {
       // 普通浏览器预览没有 Tauri 窗口。
     });
-  }, [visibleSessions.length]);
+  }, [isIslandExpanded, visibleSessions.length]);
 
   async function handleHide(sessionId: string) {
     setOptimisticallyHidden((current) => {
@@ -145,9 +152,16 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell" aria-label="Codex Island">
+    <main
+      className={`app-shell ${visibleSessions.length > 0 ? "app-shell--island" : "app-shell--setup"}`}
+      aria-label="Codex Island"
+    >
       {visibleSessions.length > 0 ? (
-        <Island sessions={visibleSessions} onHide={handleHide} />
+        <Island
+          sessions={visibleSessions}
+          onHide={handleHide}
+          onExpandedChange={setIsIslandExpanded}
+        />
       ) : (
         <SetupPanel
           windowsSnippet={

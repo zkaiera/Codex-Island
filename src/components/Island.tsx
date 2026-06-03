@@ -7,12 +7,14 @@ import type { SessionView } from "./session";
 type IslandProps = {
   sessions: SessionView[];
   onHide: (sessionId: string) => void;
+  onExpandedChange?: (expanded: boolean) => void;
   maxVisibleCollapsed?: number;
 };
 
 export function Island({
   sessions,
   onHide,
+  onExpandedChange,
   maxVisibleCollapsed = calculateVisibleCount(),
 }: IslandProps) {
   const [expanded, setExpanded] = useState(false);
@@ -29,11 +31,16 @@ export function Island({
   const visiblePills = orderedSessions.slice(0, maxVisibleCollapsed);
   const hiddenCount = Math.max(orderedSessions.length - visiblePills.length, 0);
 
+  function updateExpanded(nextExpanded: boolean) {
+    setExpanded(nextExpanded);
+    onExpandedChange?.(nextExpanded);
+  }
+
   return (
     <div
       className={`island-wrapper${expanded ? " island-wrapper--expanded" : ""}`}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      onMouseEnter={() => updateExpanded(true)}
+      onMouseLeave={() => updateExpanded(false)}
     >
       <div className="island" aria-label="Codex Island">
         <div className="island__pills">
