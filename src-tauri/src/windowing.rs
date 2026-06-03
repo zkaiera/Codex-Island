@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{
-    AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Runtime, Size,
-};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Runtime, Size};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -180,8 +178,14 @@ pub fn initial_position_for_layout(
     let max_y = work_area.y + work_area.height - next.height;
 
     match edge {
-        SnapEdge::Top => (clamp(centered_x, work_area.x, max_x), work_area.y - next.height / 2),
-        SnapEdge::Left => (work_area.x - next.width / 2, clamp(centered_y, work_area.y, max_y)),
+        SnapEdge::Top => (
+            clamp(centered_x, work_area.x, max_x),
+            work_area.y - next.height / 2,
+        ),
+        SnapEdge::Left => (
+            work_area.x - next.width / 2,
+            clamp(centered_y, work_area.y, max_y),
+        ),
         SnapEdge::Right => (
             work_area.x + work_area.width - next.width / 2,
             clamp(centered_y, work_area.y, max_y),

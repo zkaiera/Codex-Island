@@ -27,8 +27,10 @@ export function Island({
 }: IslandProps) {
   const [expanded, setExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [snapping, setSnapping] = useState(false);
   const collapseTimer = useRef<number | null>(null);
   const expandTimer = useRef<number | null>(null);
+  const snapTimer = useRef<number | null>(null);
   const expandedRef = useRef(expanded);
 
   const orderedSessions = useMemo(
@@ -50,6 +52,9 @@ export function Island({
       }
       if (expandTimer.current !== null) {
         window.clearTimeout(expandTimer.current);
+      }
+      if (snapTimer.current !== null) {
+        window.clearTimeout(snapTimer.current);
       }
     },
     [],
@@ -123,7 +128,7 @@ export function Island({
     collapseTimer.current = window.setTimeout(() => {
       collapseTimer.current = null;
       updateExpanded(false);
-    }, 180);
+    }, 280);
   }
 
   async function handleDragStart(event: PointerEvent<HTMLDivElement>) {
@@ -150,6 +155,11 @@ export function Island({
     onExpandedChange?.(false);
 
     try {
+      await invoke("set_window_mode", {
+        mode: "island",
+        edge: snapEdge,
+        initial: false,
+      });
       await getCurrentWindow().startDragging();
       await snapAfterDrag();
     } catch {
@@ -167,6 +177,14 @@ export function Island({
       .then((edge) => {
         if (edge) {
           onSnapEdgeChange?.(edge);
+          setSnapping(true);
+          if (snapTimer.current !== null) {
+            window.clearTimeout(snapTimer.current);
+          }
+          snapTimer.current = window.setTimeout(() => {
+            snapTimer.current = null;
+            setSnapping(false);
+          }, 360);
         }
       })
       .catch(() => {
@@ -180,16 +198,22 @@ export function Island({
         "island-wrapper",
         expanded ? "island-wrapper--expanded" : "",
         dragging ? "island-wrapper--dragging" : "",
+        snapping ? "island-wrapper--snapping" : "",
         `island-wrapper--edge-${snapEdge}`,
       ]
         .filter(Boolean)
         .join(" ")}
       data-tauri-drag-region="false"
-      onPointerDown={handleDragStart}
       onPointerEnter={queueExpand}
       onPointerLeave={queueCollapse}
     >
-      <div className="island" aria-label="Codex Island">
+      <div
+        className="island"
+        aria-label="Codex Island"
+        aria-expanded={expanded}
+        data-tauri-drag-region="true"
+        onPointerDown={handleDragStart}
+      >
         <div className="island__pills">
           {visiblePills.length === 0 ? (
             <span className="island__dot island__dot--idle" aria-hidden="true" />

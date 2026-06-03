@@ -90,7 +90,7 @@ describe("Island", () => {
     expect(onHide).toHaveBeenCalledWith("one");
 
     fireEvent.pointerLeave(screen.getByLabelText("Codex Island").parentElement!);
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(300);
     expect(onExpandedChange).toHaveBeenCalledWith(false);
   });
 
@@ -106,9 +106,9 @@ describe("Island", () => {
       />,
     );
 
-    const islandWrapper = screen.getByLabelText("Codex Island").parentElement!;
+    const island = screen.getByLabelText("Codex Island");
 
-    fireEvent.pointerDown(islandWrapper, {
+    fireEvent.pointerDown(island, {
       button: 0,
       pointerId: 1,
       pointerType: "mouse",
@@ -118,7 +118,12 @@ describe("Island", () => {
     await Promise.resolve();
 
     expect(setPointerCaptureMock).toHaveBeenCalledWith(1);
-    expect(startDraggingMock).toHaveBeenCalled();
+    await waitFor(() => expect(startDraggingMock).toHaveBeenCalled());
+    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+      mode: "island",
+      edge: "top",
+      initial: false,
+    });
     expect(invokeMock).toHaveBeenCalledWith("snap_window");
     await waitFor(() => expect(onSnapEdgeChange).toHaveBeenCalledWith("left"));
   });

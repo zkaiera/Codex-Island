@@ -44,7 +44,9 @@ fn toggle_autostart<R: Runtime>(app: &tauri::AppHandle<R>, item: &CheckMenuItem<
         .map_err(Into::into)
         .and_then(|path| startup::set_enabled(next_enabled, &path));
 
-    let checked = result.map(|_| next_enabled).unwrap_or_else(|_| startup::is_enabled());
+    let checked = result
+        .map(|_| next_enabled)
+        .unwrap_or_else(|_| startup::is_enabled());
     let _ = item.set_checked(checked);
     let _ = app.emit("autostart:changed", checked);
 }

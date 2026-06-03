@@ -95,3 +95,39 @@ fn preserves_created_at_after_first_write() {
     assert_eq!(first.created_at, second.created_at);
     assert!(second.updated_at >= first.updated_at);
 }
+
+#[test]
+fn new_activity_after_stop_marks_session_running_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let stopped = parse_and_build_record(
+        r#"{
+            "session_id": "abc123",
+            "cwd": "/work/a",
+            "hook_event_name": "Stop"
+        }"#,
+        Source::Wsl,
+        Some("Ubuntu".into()),
+    )
+    .unwrap();
+    let stopped = write_record(dir.path(), stopped).unwrap();
+
+    let restarted = parse_and_build_record(
+        r#"{
+            "session_id": "abc123",
+            "turn_id": "turn-2",
+            "cwd": "/work/a",
+            "hook_event_name": "UserPromptSubmit"
+        }"#,
+        Source::Wsl,
+        Some("Ubuntu".into()),
+    )
+    .unwrap();
+    let restarted = write_record(dir.path(), restarted).unwrap();
+
+    assert_eq!(stopped.ui_state, UiState::Completed);
+    assert_eq!(restarted.ui_state, UiState::Running);
+    assert_eq!(restarted.last_event, HookEvent::UserPromptSubmit);
+    assert_eq!(restarted.turn_id.as_deref(), Some("turn-2"));
+    assert_eq!(stopped.created_at, restarted.created_at);
+    assert!(restarted.updated_at >= stopped.updated_at);
+}

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex, RwLock};
 
-use notify::RecommendedWatcher;
 use crate::store::SessionStore;
+use notify::RecommendedWatcher;
 
 #[derive(Clone)]
 pub struct AppState {

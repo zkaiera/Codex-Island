@@ -23,9 +23,10 @@ export default function App() {
     new URLSearchParams(window.location.search).get("demo") === "1" ? demoSessions : [],
   );
   const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(new Set());
-  const [isIslandExpanded, setIsIslandExpanded] = useState(false);
+  const [windowModeExpanded, setWindowModeExpanded] = useState(false);
   const [snapEdge, setSnapEdge] = useState<SnapEdge>("top");
   const didApplyInitialLayout = useRef(false);
+  const shrinkTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -78,14 +79,23 @@ export default function App() {
   );
 
   useLayoutEffect(() => {
-    const mode = isIslandExpanded ? "island_expanded" : "island";
+    const mode = windowModeExpanded ? "island_expanded" : "island";
     const initial = !didApplyInitialLayout.current;
     didApplyInitialLayout.current = true;
 
     void invoke("set_window_mode", { mode, edge: snapEdge, initial }).catch(() => {
       // 普通浏览器预览没有 Tauri 窗口。
     });
-  }, [isIslandExpanded, snapEdge]);
+  }, [windowModeExpanded, snapEdge]);
+
+  useEffect(
+    () => () => {
+      if (shrinkTimer.current !== null) {
+        window.clearTimeout(shrinkTimer.current);
+      }
+    },
+    [],
+  );
 
   async function handleHide(sessionId: string) {
     setOptimisticallyHidden((current) => {
@@ -105,6 +115,23 @@ export default function App() {
     }
   }
 
+  function handleExpandedChange(expanded: boolean) {
+    if (shrinkTimer.current !== null) {
+      window.clearTimeout(shrinkTimer.current);
+      shrinkTimer.current = null;
+    }
+
+    if (expanded) {
+      setWindowModeExpanded(true);
+      return;
+    }
+
+    shrinkTimer.current = window.setTimeout(() => {
+      shrinkTimer.current = null;
+      setWindowModeExpanded(false);
+    }, 260);
+  }
+
   return (
     <main
       className={`app-shell app-shell--island app-shell--edge-${snapEdge}`}
@@ -113,7 +140,7 @@ export default function App() {
       <Island
         sessions={visibleSessions}
         onHide={handleHide}
-        onExpandedChange={setIsIslandExpanded}
+        onExpandedChange={handleExpandedChange}
         snapEdge={snapEdge}
         onSnapEdgeChange={setSnapEdge}
       />

@@ -44,12 +44,7 @@ pub struct SessionRecord {
 }
 
 impl SessionRecord {
-    pub fn new(
-        session_id: String,
-        cwd: String,
-        source: Source,
-        distro: Option<String>,
-    ) -> Self {
+    pub fn new(session_id: String, cwd: String, source: Source, distro: Option<String>) -> Self {
         let now = Utc::now();
         let title = title_from_cwd(&cwd);
 
@@ -141,13 +136,8 @@ mod tests {
     #[test]
     fn hidden_session_reappears_only_after_newer_event() {
         let hidden_at = Utc.with_ymd_and_hms(2026, 6, 3, 10, 0, 0).unwrap();
-        let record = SessionRecord::new(
-            "abc".into(),
-            "/work/a".into(),
-            Source::Windows,
-            None,
-        )
-        .with_updated_at(hidden_at + Duration::seconds(30));
+        let record = SessionRecord::new("abc".into(), "/work/a".into(), Source::Windows, None)
+            .with_updated_at(hidden_at + Duration::seconds(30));
 
         assert!(record.is_newer_than(hidden_at));
     }

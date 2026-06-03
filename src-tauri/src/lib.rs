@@ -2,19 +2,24 @@ use tauri::Manager;
 
 use crate::domain::SessionRecord;
 
+pub mod codex_sessions;
 pub mod domain;
 pub mod hook;
 pub mod paths;
+pub mod startup;
 pub mod state;
 pub mod store;
-pub mod startup;
 pub mod time;
 pub mod tray;
 pub mod watcher;
 pub mod windowing;
 
 #[tauri::command]
-fn hide_session(session_id: String, state: tauri::State<'_, state::AppState>, app: tauri::AppHandle) {
+fn hide_session(
+    session_id: String,
+    state: tauri::State<'_, state::AppState>,
+    app: tauri::AppHandle,
+) {
     {
         let mut store = state.store.write().expect("session store poisoned");
         store.hide(&session_id, chrono::Utc::now());
@@ -72,10 +77,7 @@ pub fn run() {
                 app_state.store.clone(),
                 paths::default_state_dir(),
             )?;
-            let mut guard = app_state
-                .watcher
-                .lock()
-                .expect("watcher state poisoned");
+            let mut guard = app_state.watcher.lock().expect("watcher state poisoned");
             *guard = Some(watcher);
             Ok(())
         })

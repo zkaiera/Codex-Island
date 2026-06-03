@@ -6,12 +6,13 @@ use chrono::Utc;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Runtime};
 
+use crate::codex_sessions::{default_codex_session_roots, merge_sessions_with_codex_logs};
 use crate::domain::SessionRecord;
 use crate::store::SessionStore;
 
 pub const SESSIONS_CHANGED_EVENT: &str = "sessions:changed";
 pub const WATCH_DEBOUNCE_MS: u64 = 250;
-pub const STALE_TICK_SECS: u64 = 30;
+pub const PERIODIC_RELOAD_SECS: u64 = 5;
 
 pub fn watch_directory(path: &Path) -> notify::Result<(RecommendedWatcher, Receiver<PathBuf>)> {
     let (output_tx, output_rx) = mpsc::channel();
@@ -38,7 +39,7 @@ pub fn start_session_sync<R: Runtime>(
     state_dir: PathBuf,
 ) -> notify::Result<RecommendedWatcher> {
     std::fs::create_dir_all(&state_dir)?;
-    let initial_sessions = load_sessions_from_dir(&state_dir);
+    let initial_sessions = load_sessions_with_default_codex_logs(&state_dir, Utc::now());
 
     {
         let mut guard = store.write().expect("session store poisoned");
@@ -54,12 +55,7 @@ pub fn start_session_sync<R: Runtime>(
         let store = store.clone();
         std::thread::spawn(move || {
             while output_rx.recv().is_ok() {
-                let sessions = load_sessions_from_dir(&reload_state_dir);
-                {
-                    let mut guard = store.write().expect("session store poisoned");
-                    guard.replace_all(sessions);
-                }
-                emit_visible_sessions(&app, &store);
+                reload_sessions(&app, &store, &reload_state_dir);
             }
         });
     }
@@ -67,9 +63,10 @@ pub fn start_session_sync<R: Runtime>(
     {
         let app = app.clone();
         let store = store.clone();
+        let reload_state_dir = state_dir.clone();
         std::thread::spawn(move || loop {
-            std::thread::sleep(Duration::from_secs(STALE_TICK_SECS));
-            emit_visible_sessions(&app, &store);
+            std::thread::sleep(Duration::from_secs(PERIODIC_RELOAD_SECS));
+            reload_sessions(&app, &store, &reload_state_dir);
         });
     }
 
@@ -92,6 +89,24 @@ pub fn load_sessions_from_dir(state_dir: &Path) -> Vec<SessionRecord> {
     }
 
     sessions
+}
+
+pub fn load_sessions_with_codex_logs(
+    state_dir: &Path,
+    codex_session_roots: &[PathBuf],
+    now: chrono::DateTime<Utc>,
+) -> Vec<SessionRecord> {
+    let sessions = load_sessions_from_dir(state_dir);
+    merge_sessions_with_codex_logs(sessions, codex_session_roots, now)
+}
+
+fn load_sessions_with_default_codex_logs(
+    state_dir: &Path,
+    now: chrono::DateTime<Utc>,
+) -> Vec<SessionRecord> {
+    let sessions = load_sessions_from_dir(state_dir);
+    let codex_session_roots = default_codex_session_roots(&sessions);
+    merge_sessions_with_codex_logs(sessions, &codex_session_roots, now)
 }
 
 pub fn emit_visible_sessions<R: Runtime>(
@@ -124,6 +139,19 @@ fn is_smoke_status_file(path: &Path) -> bool {
         .and_then(|value| value.to_str())
         .map(|stem| stem.starts_with("codex-island-smoke-"))
         .unwrap_or(false)
+}
+
+fn reload_sessions<R: Runtime>(
+    app: &AppHandle<R>,
+    store: &std::sync::Arc<std::sync::RwLock<SessionStore>>,
+    state_dir: &Path,
+) {
+    let sessions = load_sessions_with_default_codex_logs(state_dir, Utc::now());
+    {
+        let mut guard = store.write().expect("session store poisoned");
+        guard.replace_all(sessions);
+    }
+    emit_visible_sessions(app, store);
 }
 
 fn debounce_loop(input_rx: Receiver<PathBuf>, output_tx: mpsc::Sender<PathBuf>) {
