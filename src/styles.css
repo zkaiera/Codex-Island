@@ -75,6 +75,33 @@ body {
   line-height: 1.5;
 }
 
+.setup-panel__notice {
+  padding: 10px 12px;
+  border: 1px solid rgb(255 191 56 / 22%);
+  border-radius: 12px;
+  background: rgb(255 191 56 / 8%);
+  color: #ffd37a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.setup-panel__preview {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgb(59 156 255 / 35%);
+  border-radius: 999px;
+  background: rgb(59 156 255 / 12%);
+  color: #d8ecff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.setup-panel__preview:hover {
+  background: rgb(59 156 255 / 20%);
+}
+
 .setup-panel__section {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { Island } from "./components/Island";
 import { SetupPanel } from "./components/SetupPanel";
+import { demoSessions } from "./components/demoSessions";
 import type { SessionView } from "./components/session";
 
 type BackendSession = {
@@ -24,9 +25,12 @@ type SetupSnippets = {
 };
 
 export default function App() {
-  const [sessions, setSessions] = useState<SessionView[]>([]);
+  const [sessions, setSessions] = useState<SessionView[]>(() =>
+    new URLSearchParams(window.location.search).get("demo") === "1" ? demoSessions : [],
+  );
   const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(new Set());
   const [setupSnippets, setSetupSnippets] = useState<SetupSnippets | null>(null);
+  const [isBrowserPreview, setIsBrowserPreview] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -65,8 +69,10 @@ export default function App() {
       try {
         const snippets = await invoke<SetupSnippets>("get_setup_snippets");
         setSetupSnippets(snippets);
+        setIsBrowserPreview(false);
       } catch {
         setSetupSnippets(null);
+        setIsBrowserPreview(true);
       }
     }
 
@@ -104,9 +110,20 @@ export default function App() {
         <Island sessions={visibleSessions} onHide={handleHide} />
       ) : (
         <SetupPanel
-          windowsSnippet={setupSnippets?.windows ?? "正在准备 Windows hooks 片段..."}
-          wslSnippet={setupSnippets?.wsl ?? "正在准备 WSL hooks 片段..."}
-          stateDir={setupSnippets?.state_dir ?? "正在读取状态目录..."}
+          windowsSnippet={
+            setupSnippets?.windows ??
+            "普通网页预览无法生成真实 Windows hooks 片段，请在 Tauri 桌面应用中查看。"
+          }
+          wslSnippet={
+            setupSnippets?.wsl ??
+            "普通网页预览无法生成真实 WSL hooks 片段，请在 Tauri 桌面应用中查看。"
+          }
+          stateDir={setupSnippets?.state_dir ?? "普通网页预览无法读取本机状态目录。"}
+          isBrowserPreview={isBrowserPreview}
+          onPreviewDemo={() => {
+            setOptimisticallyHidden(new Set());
+            setSessions(demoSessions);
+          }}
         />
       )}
     </main>
