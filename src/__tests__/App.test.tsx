@@ -16,12 +16,22 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: listenMock,
 }));
 
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    startDragging: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 describe("App", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockImplementation((command: string) => {
       if (command === "set_window_mode") {
         return Promise.resolve();
+      }
+
+      if (command === "snap_window") {
+        return Promise.resolve("top");
       }
 
       return Promise.reject(new Error("not running in Tauri"));
@@ -58,6 +68,10 @@ describe("App", () => {
             updated_at: "2026-06-03T10:01:00Z",
           },
         ]);
+      }
+
+      if (command === "snap_window") {
+        return Promise.resolve("top");
       }
 
       return Promise.reject(new Error("not running in Tauri"));

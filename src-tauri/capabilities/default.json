@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default permissions for Codex Island",
   "windows": ["main"],
-  "permissions": []
+  "permissions": ["core:window:allow-start-dragging"]
 }

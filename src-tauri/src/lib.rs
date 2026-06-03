@@ -7,8 +7,11 @@ pub mod hook;
 pub mod paths;
 pub mod state;
 pub mod store;
+pub mod startup;
 pub mod time;
+pub mod tray;
 pub mod watcher;
+pub mod windowing;
 
 #[tauri::command]
 fn hide_session(session_id: String, state: tauri::State<'_, state::AppState>, app: tauri::AppHandle) {
@@ -26,6 +29,11 @@ fn get_sessions(state: tauri::State<'_, state::AppState>) -> Vec<SessionRecord> 
 }
 
 #[tauri::command]
+fn snap_window(app: tauri::AppHandle) -> Option<windowing::SnapEdge> {
+    windowing::snap_main_window(&app)
+}
+
+#[tauri::command]
 fn set_window_mode(mode: String, app: tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -33,7 +41,7 @@ fn set_window_mode(mode: String, app: tauri::AppHandle) {
 
     let size = match mode.as_str() {
         "island_expanded" => LogicalSize::new(640.0, 420.0),
-        _ => LogicalSize::new(640.0, 120.0),
+        _ => LogicalSize::new(180.0, 48.0),
     };
 
     let _ = window.set_decorations(false);
@@ -45,8 +53,14 @@ fn set_window_mode(mode: String, app: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(state::AppState::default())
-        .invoke_handler(tauri::generate_handler![get_sessions, hide_session, set_window_mode])
+        .invoke_handler(tauri::generate_handler![
+            get_sessions,
+            hide_session,
+            set_window_mode,
+            snap_window
+        ])
         .setup(|app| {
+            tray::setup_tray(app)?;
             let app_state = app.state::<state::AppState>();
             let watcher = watcher::start_session_sync(
                 app.handle().clone(),

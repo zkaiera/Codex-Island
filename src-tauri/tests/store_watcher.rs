@@ -1,7 +1,8 @@
 use chrono::{Duration, TimeZone, Utc};
 use codex_island_lib::domain::{SessionRecord, Source, UiState};
 use codex_island_lib::store::{
-    mark_stale, should_show_again, sort_sessions, HiddenSession, SessionStore,
+    mark_stale, should_display_session, should_show_again, sort_sessions, HiddenSession,
+    SessionStore,
 };
 
 #[test]
@@ -80,4 +81,43 @@ fn hidden_sessions_stay_hidden_until_newer_update() {
     store.upsert(session.with_updated_at(hidden_at + Duration::seconds(30)));
 
     assert_eq!(store.recompute_visible(hidden_at).len(), 1);
+}
+
+#[test]
+fn stale_sessions_are_kept_for_eight_hours_after_last_update() {
+    let now = Utc.with_ymd_and_hms(2026, 6, 3, 18, 0, 0).unwrap();
+    let stale_within_retention = SessionRecord::new(
+        "within".into(),
+        "/work/within".into(),
+        Source::Wsl,
+        Some("Ubuntu".into()),
+    )
+    .with_updated_at(now - Duration::hours(8))
+    .with_ui_state(UiState::Stale);
+    let stale_too_old = SessionRecord::new(
+        "old".into(),
+        "/work/old".into(),
+        Source::Wsl,
+        Some("Ubuntu".into()),
+    )
+    .with_updated_at(now - Duration::hours(8) - Duration::seconds(1))
+    .with_ui_state(UiState::Stale);
+
+    assert!(should_display_session(&stale_within_retention, now));
+    assert!(!should_display_session(&stale_too_old, now));
+}
+
+#[test]
+fn completed_sessions_drop_out_after_ten_minutes() {
+    let now = Utc.with_ymd_and_hms(2026, 6, 3, 18, 0, 0).unwrap();
+    let completed = SessionRecord::new(
+        "done".into(),
+        "/work/done".into(),
+        Source::Windows,
+        None,
+    )
+    .with_updated_at(now - Duration::minutes(11))
+    .with_ui_state(UiState::Completed);
+
+    assert!(!should_display_session(&completed, now));
 }

@@ -1,9 +1,24 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Island } from "../components/Island";
 import type { SessionView } from "../components/session";
+
+const { invokeMock, startDraggingMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  startDraggingMock: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: invokeMock,
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    startDragging: startDraggingMock,
+  }),
+}));
 
 const makeSession = (id: string, createdAt: string): SessionView => ({
   sessionId: id,
@@ -15,6 +30,14 @@ const makeSession = (id: string, createdAt: string): SessionView => ({
 });
 
 describe("Island", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    invokeMock.mockRejectedValue(new Error("not running in Tauri"));
+    startDraggingMock.mockReset();
+    startDraggingMock.mockResolvedValue(undefined);
+    vi.useRealTimers();
+  });
+
   it("renders all sessions in created_at order", () => {
     const older = makeSession("older", "2026-06-03T09:00:00.000Z");
     const newer = makeSession("newer", "2026-06-03T11:00:00.000Z");
@@ -61,5 +84,26 @@ describe("Island", () => {
 
     fireEvent.mouseLeave(screen.getByLabelText("Codex Island").parentElement!);
     expect(onExpandedChange).toHaveBeenCalledWith(false);
+  });
+
+  it("starts native dragging and reports the snapped edge", async () => {
+    vi.useFakeTimers();
+    invokeMock.mockResolvedValue("left");
+    const onSnapEdgeChange = vi.fn();
+
+    render(
+      <Island
+        sessions={[]}
+        onHide={() => undefined}
+        onSnapEdgeChange={onSnapEdgeChange}
+      />,
+    );
+
+    fireEvent.mouseDown(screen.getByLabelText("Codex Island"), { button: 0 });
+    await vi.runAllTimersAsync();
+
+    expect(startDraggingMock).toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith("snap_window");
+    expect(onSnapEdgeChange).toHaveBeenCalledWith("left");
   });
 });

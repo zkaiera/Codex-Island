@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type MouseEvent } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { SessionList } from "./SessionList";
 import { SessionPill } from "./SessionPill";
@@ -8,16 +10,24 @@ type IslandProps = {
   sessions: SessionView[];
   onHide: (sessionId: string) => void;
   onExpandedChange?: (expanded: boolean) => void;
+  snapEdge?: SnapEdge;
+  onSnapEdgeChange?: (edge: SnapEdge) => void;
   maxVisibleCollapsed?: number;
 };
+
+type SnapEdge = "top" | "left" | "right";
 
 export function Island({
   sessions,
   onHide,
   onExpandedChange,
+  snapEdge = "top",
+  onSnapEdgeChange,
   maxVisibleCollapsed = calculateVisibleCount(),
 }: IslandProps) {
   const [expanded, setExpanded] = useState(false);
+  const [snapping, setSnapping] = useState(false);
+  const snapTimer = useRef<number | null>(null);
 
   const orderedSessions = useMemo(
     () =>
@@ -36,9 +46,47 @@ export function Island({
     onExpandedChange?.(nextExpanded);
   }
 
+  function handleDragStart(event: MouseEvent<HTMLDivElement>) {
+    if (event.button !== 0 || (event.target as Element).closest("button")) {
+      return;
+    }
+
+    if (snapTimer.current !== null) {
+      window.clearTimeout(snapTimer.current);
+    }
+
+    void getCurrentWindow().startDragging().catch(() => {
+      // 普通浏览器预览没有 Tauri 窗口。
+    });
+
+    snapTimer.current = window.setTimeout(() => {
+      setSnapping(true);
+      void invoke<SnapEdge>("snap_window")
+        .then((edge) => {
+          if (edge) {
+            onSnapEdgeChange?.(edge);
+          }
+        })
+        .catch(() => {
+          // 普通浏览器预览没有 Tauri 后端。
+        })
+        .finally(() => {
+          window.setTimeout(() => setSnapping(false), 260);
+        });
+    }, 520);
+  }
+
   return (
     <div
-      className={`island-wrapper${expanded ? " island-wrapper--expanded" : ""}`}
+      className={[
+        "island-wrapper",
+        expanded ? "island-wrapper--expanded" : "",
+        snapping ? "island-wrapper--snapping" : "",
+        `island-wrapper--edge-${snapEdge}`,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onMouseDown={handleDragStart}
       onMouseEnter={() => updateExpanded(true)}
       onMouseLeave={() => updateExpanded(false)}
     >

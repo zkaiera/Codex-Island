@@ -16,6 +16,7 @@ type BackendSession = {
 };
 
 const SESSIONS_CHANGED_EVENT = "sessions:changed";
+type SnapEdge = "top" | "left" | "right";
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionView[]>(() =>
@@ -23,6 +24,7 @@ export default function App() {
   );
   const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(new Set());
   const [isIslandExpanded, setIsIslandExpanded] = useState(false);
+  const [snapEdge, setSnapEdge] = useState<SnapEdge>("top");
 
   useEffect(() => {
     let disposed = false;
@@ -77,9 +79,16 @@ export default function App() {
   useEffect(() => {
     const mode = isIslandExpanded ? "island_expanded" : "island";
 
-    void invoke("set_window_mode", { mode }).catch(() => {
-      // 普通浏览器预览没有 Tauri 窗口。
-    });
+    void invoke("set_window_mode", { mode })
+      .then(() => invoke<SnapEdge>("snap_window"))
+      .then((edge) => {
+        if (edge) {
+          setSnapEdge(edge);
+        }
+      })
+      .catch(() => {
+        // 普通浏览器预览没有 Tauri 窗口。
+      });
   }, [isIslandExpanded]);
 
   async function handleHide(sessionId: string) {
@@ -102,13 +111,15 @@ export default function App() {
 
   return (
     <main
-      className="app-shell app-shell--island"
+      className={`app-shell app-shell--island app-shell--edge-${snapEdge}`}
       aria-label="Codex Island"
     >
       <Island
         sessions={visibleSessions}
         onHide={handleHide}
         onExpandedChange={setIsIslandExpanded}
+        snapEdge={snapEdge}
+        onSnapEdgeChange={setSnapEdge}
       />
     </main>
   );

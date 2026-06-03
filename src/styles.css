@@ -34,7 +34,6 @@ body {
   justify-content: center;
   width: 100vw;
   height: 100vh;
-  padding-top: 8px;
   pointer-events: none;
 }
 
@@ -42,16 +41,46 @@ body {
   overflow: hidden;
 }
 
+.app-shell--edge-top {
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.app-shell--edge-left {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.app-shell--edge-right {
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .island-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   pointer-events: auto;
+  --snap-surface-transform: translateY(-2px) scaleX(1.08) scaleY(0.82);
 }
 
 .island-wrapper--expanded {
-  padding-top: 2px;
+  padding-top: 0;
+}
+
+.island-wrapper--edge-left {
+  align-items: flex-start;
+  --snap-surface-transform: translateX(-2px) scaleX(0.84) scaleY(1.12);
+}
+
+.island-wrapper--edge-right {
+  align-items: flex-end;
+  --snap-surface-transform: translateX(2px) scaleX(0.84) scaleY(1.12);
+}
+
+.island-wrapper--edge-top {
+  --snap-surface-transform: translateY(-2px) scaleX(1.08) scaleY(0.82);
 }
 
 .island {
@@ -67,6 +96,23 @@ body {
   box-shadow:
     0 16px 38px rgb(0 0 0 / 38%),
     inset 0 1px 0 rgb(255 255 255 / 10%);
+  cursor: grab;
+  transform-origin: top center;
+  transition:
+    border-radius 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.island-wrapper--edge-left .island {
+  transform-origin: left center;
+}
+
+.island-wrapper--edge-right .island {
+  transform-origin: right center;
+}
+
+.island-wrapper--snapping .island {
+  animation: surface-tension 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .island__pills {
@@ -233,5 +279,23 @@ body {
   50% {
     opacity: 1;
     transform: scale(1.18);
+  }
+}
+
+@keyframes surface-tension {
+  0% {
+    transform: scale(1);
+  }
+
+  42% {
+    transform: var(--snap-surface-transform);
+  }
+
+  70% {
+    transform: scaleX(1.03) scaleY(0.97);
+  }
+
+  100% {
+    transform: scale(1);
   }
 }

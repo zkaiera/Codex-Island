@@ -5,6 +5,8 @@ use chrono::{DateTime, Duration, Utc};
 use crate::domain::{SessionRecord, UiState};
 
 pub const DEFAULT_STALE_MINUTES: i64 = 10;
+pub const COMPLETED_RETENTION_MINUTES: i64 = 10;
+pub const STALE_RETENTION_HOURS: i64 = 8;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HiddenSession {
@@ -67,6 +69,7 @@ impl SessionStore {
             .filter(|session| !self.hidden_sessions.contains_key(&session.session_id))
             .cloned()
             .map(|session| mark_stale(session, now, self.stale_after))
+            .filter(|session| should_display_session(session, now))
             .collect::<Vec<_>>();
 
         sort_sessions(visible)
@@ -81,6 +84,22 @@ impl SessionStore {
 
     pub fn sessions(&self) -> Vec<SessionRecord> {
         self.sessions.values().cloned().collect()
+    }
+}
+
+pub fn should_display_session(session: &SessionRecord, now: DateTime<Utc>) -> bool {
+    match session.ui_state {
+        UiState::Completed => {
+            now.signed_duration_since(session.updated_at)
+                <= Duration::minutes(COMPLETED_RETENTION_MINUTES)
+        }
+        UiState::Stale => {
+            now.signed_duration_since(session.updated_at) <= Duration::hours(STALE_RETENTION_HOURS)
+        }
+        UiState::Error => {
+            now.signed_duration_since(session.updated_at) <= Duration::hours(STALE_RETENTION_HOURS)
+        }
+        UiState::Running | UiState::Waiting => true,
     }
 }
 
