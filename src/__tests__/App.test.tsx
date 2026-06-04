@@ -2,6 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../App";
+import {
+  HOVER_COLLAPSE_DELAY_MS,
+  HOVER_EXPAND_DELAY_MS,
+  WINDOW_MODE_SHRINK_DELAY_MS,
+} from "../interactionTimings";
 
 const { invokeMock, listenMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -129,7 +134,7 @@ describe("App", () => {
     const wrapper = screen.getByLabelText("Codex Island", { selector: ".island" }).parentElement!;
     fireEvent.pointerEnter(wrapper);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS + 30);
     });
 
     expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
@@ -141,7 +146,9 @@ describe("App", () => {
     fireEvent.pointerLeave(wrapper, { relatedTarget: document.body });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(400);
+      await vi.advanceTimersByTimeAsync(
+        HOVER_COLLAPSE_DELAY_MS + WINDOW_MODE_SHRINK_DELAY_MS - 20,
+      );
     });
 
     expect(invokeMock).not.toHaveBeenCalledWith("set_window_mode", {
@@ -151,7 +158,7 @@ describe("App", () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(60);
+      await vi.advanceTimersByTimeAsync(40);
     });
 
     expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
@@ -201,7 +208,7 @@ describe("App", () => {
 
     fireEvent.pointerEnter(screen.getByLabelText("Codex Island", { selector: ".island" }).parentElement!);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS + 30);
     });
 
     expect(screen.getByText(/运行中/)).toBeInTheDocument();

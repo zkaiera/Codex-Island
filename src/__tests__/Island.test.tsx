@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Island } from "../components/Island";
+import { HOVER_COLLAPSE_DELAY_MS, HOVER_EXPAND_DELAY_MS } from "../interactionTimings";
 import type { SessionView } from "../components/session";
 
 const { invokeMock, startDraggingMock } = vi.hoisted(() => ({
@@ -81,7 +82,7 @@ describe("Island", () => {
     );
 
     fireEvent.pointerEnter(screen.getByLabelText("Codex Island").parentElement!);
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS + 30);
     expect(screen.getByText("one-project")).toBeInTheDocument();
     expect(screen.getByText(/运行中/)).toBeInTheDocument();
     expect(onExpandedChange).toHaveBeenCalledWith(true);
@@ -111,14 +112,14 @@ describe("Island", () => {
 
     fireEvent.pointerEnter(wrapper);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS + 30);
     });
 
     const panel = screen.getByText("1 active").parentElement!;
     fireEvent.pointerLeave(wrapper, { relatedTarget: panel });
     fireEvent.pointerEnter(panel);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(320);
+      await vi.advanceTimersByTimeAsync(HOVER_COLLAPSE_DELAY_MS + 20);
     });
 
     expect(onExpandedChange).not.toHaveBeenCalledWith(false);
@@ -142,17 +143,17 @@ describe("Island", () => {
 
     fireEvent.pointerEnter(wrapper);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS + 30);
     });
     fireEvent.pointerLeave(wrapper, { relatedTarget: document.body });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(HOVER_COLLAPSE_DELAY_MS - 20);
     });
     expect(onExpandedChange).not.toHaveBeenCalledWith(false);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(120);
+      await vi.advanceTimersByTimeAsync(40);
     });
     expect(onExpandedChange).toHaveBeenCalledWith(false);
     expect(screen.getByLabelText("Codex Island")).toHaveAttribute("aria-expanded", "false");

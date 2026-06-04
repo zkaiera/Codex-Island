@@ -4,11 +4,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { SessionList } from "./SessionList";
 import { SessionPill } from "./SessionPill";
+import {
+  HOVER_COLLAPSE_DELAY_MS,
+  HOVER_EXPAND_DELAY_MS,
+  SNAP_FEEDBACK_MS,
+} from "../interactionTimings";
 import type { SessionView } from "./session";
-
-const HOVER_EXPAND_DELAY_MS = 70;
-const HOVER_COLLAPSE_DELAY_MS = 220;
-const SNAP_FEEDBACK_MS = 360;
 
 type IslandProps = {
   sessions: SessionView[];
@@ -135,17 +136,29 @@ export function Island({
     }, HOVER_COLLAPSE_DELAY_MS);
   }
 
+  function cancelCollapse() {
+    if (collapseTimer.current !== null) {
+      window.clearTimeout(collapseTimer.current);
+      collapseTimer.current = null;
+    }
+  }
+
   function handlePointerLeave(event: PointerEvent<HTMLDivElement>) {
     const nextTarget = event.relatedTarget;
     if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
-      if (collapseTimer.current !== null) {
-        window.clearTimeout(collapseTimer.current);
-        collapseTimer.current = null;
-      }
+      cancelCollapse();
       return;
     }
 
     queueCollapse();
+  }
+
+  function handlePanelPointerEnter() {
+    if (dragging) {
+      return;
+    }
+
+    cancelCollapse();
   }
 
   async function handleDragStart(event: PointerEvent<HTMLDivElement>) {
@@ -246,7 +259,7 @@ export function Island({
       {orderedSessions.length > 0 ? (
         <div
           className={`island-panel${expanded ? " island-panel--open" : ""}`}
-          onPointerEnter={queueExpand}
+          onPointerEnter={handlePanelPointerEnter}
         >
           <div className="island-panel__header">{orderedSessions.length} active</div>
           <SessionList sessions={orderedSessions} onHide={onHide} />
