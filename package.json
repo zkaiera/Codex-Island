@@ -1,6 +1,6 @@
 {
   "name": "codex-island",
-  "version": "0.1.0",
+  "version": "0.1.11",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "build:sidecar:windows": "node scripts/build-windows-sidecar.mjs",
     "bundle:windows": "pnpm build:sidecar:windows && pnpm tauri build --target x86_64-pc-windows-msvc",
-    "bundle:windows:wsl": "pnpm build:sidecar:windows && pnpm tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc",
+    "bundle:windows:wsl": "node scripts/bundle-windows-wsl.mjs",
     "test": "vitest run --passWithNoTests",
     "tauri": "tauri"
   },

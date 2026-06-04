@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { SessionList } from "./SessionList";
 import { SessionPill } from "./SessionPill";
 import {
+  DRAG_SETTLE_DELAY_MS,
   HOVER_COLLAPSE_DELAY_MS,
   HOVER_EXPAND_DELAY_MS,
   SNAP_FEEDBACK_MS,
 } from "../interactionTimings";
+import { toBackendEdge, type SnapEdge } from "../snapEdge";
 import type { SessionView } from "./session";
 
 type IslandProps = {
@@ -19,8 +21,6 @@ type IslandProps = {
   onSnapEdgeChange?: (edge: SnapEdge) => void;
   maxVisibleCollapsed?: number;
 };
-
-type SnapEdge = "top" | "left" | "right" | "floating";
 
 export function Island({
   sessions,
@@ -35,8 +35,12 @@ export function Island({
   const [snapping, setSnapping] = useState(false);
   const collapseTimer = useRef<number | null>(null);
   const expandTimer = useRef<number | null>(null);
+  const dragSettleTimer = useRef<number | null>(null);
   const snapTimer = useRef<number | null>(null);
   const expandedRef = useRef(expanded);
+  const draggingRef = useRef(false);
+  const backendSnapWatcherActiveRef = useRef(false);
+  const dragCompletionCleanupRef = useRef<null | (() => void)>(null);
 
   const orderedSessions = useMemo(
     () =>
@@ -58,9 +62,14 @@ export function Island({
       if (expandTimer.current !== null) {
         window.clearTimeout(expandTimer.current);
       }
+      if (dragSettleTimer.current !== null) {
+        window.clearTimeout(dragSettleTimer.current);
+      }
       if (snapTimer.current !== null) {
         window.clearTimeout(snapTimer.current);
       }
+      backendSnapWatcherActiveRef.current = false;
+      clearDragCompletionListeners();
     },
     [],
   );
@@ -143,7 +152,7 @@ export function Island({
     }
   }
 
-  function handlePointerLeave(event: PointerEvent<HTMLDivElement>) {
+  function handlePointerLeave(event: ReactPointerEvent<HTMLDivElement>) {
     const nextTarget = event.relatedTarget;
     if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
       cancelCollapse();
@@ -161,7 +170,95 @@ export function Island({
     cancelCollapse();
   }
 
-  async function handleDragStart(event: PointerEvent<HTMLDivElement>) {
+  function clearDragSettleTimer() {
+    if (dragSettleTimer.current !== null) {
+      window.clearTimeout(dragSettleTimer.current);
+      dragSettleTimer.current = null;
+    }
+  }
+
+  function clearDragCompletionListeners() {
+    dragCompletionCleanupRef.current?.();
+    dragCompletionCleanupRef.current = null;
+  }
+
+  function registerDragCompletionListeners() {
+    clearDragCompletionListeners();
+
+    const handlePointerEnd = () => {
+      if (!draggingRef.current) {
+        return;
+      }
+
+      scheduleDragFinalize();
+    };
+
+    document.addEventListener("pointerup", handlePointerEnd, true);
+    document.addEventListener("pointercancel", handlePointerEnd, true);
+    dragCompletionCleanupRef.current = () => {
+      document.removeEventListener("pointerup", handlePointerEnd, true);
+      document.removeEventListener("pointercancel", handlePointerEnd, true);
+    };
+  }
+
+  function scheduleDragFinalize() {
+    if (!draggingRef.current || backendSnapWatcherActiveRef.current) {
+      return;
+    }
+
+    clearDragSettleTimer();
+    dragSettleTimer.current = window.setTimeout(() => {
+      dragSettleTimer.current = null;
+      void finalizeDrag();
+    }, DRAG_SETTLE_DELAY_MS);
+  }
+
+  function applySnapEdge(edge: SnapEdge | null) {
+    if (edge === null) {
+      setSnapping(false);
+      onSnapEdgeChange?.("floating");
+      return;
+    }
+
+    onSnapEdgeChange?.(edge);
+    setSnapping(true);
+    if (snapTimer.current !== null) {
+      window.clearTimeout(snapTimer.current);
+    }
+    snapTimer.current = window.setTimeout(() => {
+      snapTimer.current = null;
+      setSnapping(false);
+    }, SNAP_FEEDBACK_MS);
+  }
+
+  function completeDrag(edge: SnapEdge | null) {
+    if (!draggingRef.current) {
+      return;
+    }
+
+    backendSnapWatcherActiveRef.current = false;
+    draggingRef.current = false;
+    clearDragSettleTimer();
+    clearDragCompletionListeners();
+    applySnapEdge(edge);
+    setDragging(false);
+  }
+
+  async function finalizeDrag() {
+    try {
+      const edge = await invoke<SnapEdge | null>("snap_window");
+      completeDrag(edge);
+    } catch {
+      // 普通浏览器预览没有 Tauri 后端。
+      backendSnapWatcherActiveRef.current = false;
+      draggingRef.current = false;
+      clearDragSettleTimer();
+      clearDragCompletionListeners();
+      setDragging(false);
+    }
+  }
+
+  async function handleDragStart(event: ReactPointerEvent<HTMLDivElement>) {
     if ((event.button ?? 0) !== 0 || (event.target as Element).closest("button")) {
       return;
     }
@@ -179,7 +276,17 @@ export function Island({
       window.clearTimeout(collapseTimer.current);
       collapseTimer.current = null;
     }
+    if (snapTimer.current !== null) {
+      window.clearTimeout(snapTimer.current);
+      snapTimer.current = null;
+    }
+    clearDragSettleTimer();
+    clearDragCompletionListeners();
+    registerDragCompletionListeners();
 
+    setSnapping(false);
+    expandedRef.current = false;
+    draggingRef.current = true;
     setDragging(true);
     setExpanded(false);
     onExpandedChange?.(false);
@@ -190,42 +297,71 @@ export function Island({
         edge: toBackendEdge(snapEdge),
         initial: false,
       });
+      backendSnapWatcherActiveRef.current = true;
+      void invoke<SnapEdge | null>("snap_window_after_drag")
+        .then((edge) => completeDrag(edge))
+        .catch(() => {
+          backendSnapWatcherActiveRef.current = false;
+          // 旧后端或普通浏览器预览会走前端 fallback。
+        });
       await getCurrentWindow().startDragging();
-      await snapAfterDrag();
     } catch {
+      backendSnapWatcherActiveRef.current = false;
+      draggingRef.current = false;
+      clearDragSettleTimer();
+      clearDragCompletionListeners();
+      setDragging(false);
       // 普通浏览器预览没有 Tauri 后端。
     } finally {
       if (target.hasPointerCapture?.(pointerId)) {
         target.releasePointerCapture(pointerId);
       }
-      setDragging(false);
     }
   }
 
-  async function snapAfterDrag() {
-    return invoke<SnapEdge | null>("snap_window")
-      .then((edge) => {
-        if (edge === null) {
-          onSnapEdgeChange?.("floating");
+  useEffect(() => {
+    let unlistenMove: null | (() => void) = null;
+    let disposed = false;
+    const currentWindow = getCurrentWindow();
+    const onMoved = currentWindow.onMoved?.bind(currentWindow);
+
+    if (onMoved === undefined) {
+      return () => {
+        if (dragSettleTimer.current !== null) {
+          window.clearTimeout(dragSettleTimer.current);
+          dragSettleTimer.current = null;
+        }
+      };
+    }
+
+    void onMoved(() => {
+        if (!draggingRef.current) {
           return;
         }
 
-        if (edge) {
-          onSnapEdgeChange?.(edge);
-          setSnapping(true);
-          if (snapTimer.current !== null) {
-            window.clearTimeout(snapTimer.current);
-          }
-          snapTimer.current = window.setTimeout(() => {
-            snapTimer.current = null;
-            setSnapping(false);
-          }, SNAP_FEEDBACK_MS);
+        scheduleDragFinalize();
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
         }
+
+        unlistenMove = unlisten;
       })
       .catch(() => {
         // 普通浏览器预览没有 Tauri 后端。
       });
-  }
+
+    return () => {
+      disposed = true;
+      if (dragSettleTimer.current !== null) {
+        window.clearTimeout(dragSettleTimer.current);
+        dragSettleTimer.current = null;
+      }
+      unlistenMove?.();
+    };
+  }, []);
 
   return (
     <div
@@ -238,6 +374,7 @@ export function Island({
       ]
         .filter(Boolean)
         .join(" ")}
+      data-testid="island-wrapper"
       data-tauri-drag-region="false"
       onPointerEnter={queueExpand}
       onPointerLeave={handlePointerLeave}
@@ -246,7 +383,7 @@ export function Island({
         className="island"
         aria-label="Codex Island"
         aria-expanded={expanded}
-        data-tauri-drag-region="true"
+        data-testid="island-surface"
         onPointerDown={handleDragStart}
       >
         <div className="island__pills">
@@ -264,6 +401,7 @@ export function Island({
       {orderedSessions.length > 0 ? (
         <div
           className={`island-panel${expanded ? " island-panel--open" : ""}`}
+          data-testid="island-panel"
           onPointerEnter={handlePanelPointerEnter}
         >
           <div className="island-panel__header">{orderedSessions.length} active</div>
@@ -272,10 +410,6 @@ export function Island({
       ) : null}
     </div>
   );
-}
-
-function toBackendEdge(edge: SnapEdge): "top" | "left" | "right" | null {
-  return edge === "floating" ? null : edge;
 }
 
 function calculateVisibleCount() {

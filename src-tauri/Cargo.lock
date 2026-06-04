@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "codex-island"
-version = "0.1.0"
+version = "0.1.11"
 dependencies = [
  "chrono",
  "notify",
@@ -335,6 +335,7 @@ dependencies = [
  "tauri-build",
  "tempfile",
  "thiserror 2.0.18",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -40,6 +40,12 @@ fn snap_window(app: tauri::AppHandle) -> Option<windowing::SnapEdge> {
 }
 
 #[tauri::command]
+async fn snap_window_after_drag(app: tauri::AppHandle) -> Option<windowing::SnapEdge> {
+    windowing::wait_for_primary_mouse_release().await;
+    windowing::snap_main_window(&app)
+}
+
+#[tauri::command]
 fn set_window_mode(
     mode: String,
     edge: Option<windowing::SnapEdge>,
@@ -68,7 +74,8 @@ pub fn run() {
             get_sessions,
             hide_session,
             set_window_mode,
-            snap_window
+            snap_window,
+            snap_window_after_drag
         ])
         .setup(|app| {
             tray::setup_tray(app)?;

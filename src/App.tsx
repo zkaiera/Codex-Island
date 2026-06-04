@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Island } from "./components/Island";
 import { demoSessions } from "./components/demoSessions";
 import { WINDOW_MODE_SHRINK_DELAY_MS } from "./interactionTimings";
+import { toBackendEdge, type SnapEdge } from "./snapEdge";
 import type { SessionView } from "./components/session";
 
 type BackendSession = {
@@ -18,7 +19,6 @@ type BackendSession = {
 
 const SESSIONS_CHANGED_EVENT = "sessions:changed";
 const SESSION_POLL_MS = 2000;
-type SnapEdge = "top" | "left" | "right" | "floating";
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionView[]>(() =>
@@ -164,10 +164,6 @@ export default function App() {
       />
     </main>
   );
-}
-
-function toBackendEdge(edge: SnapEdge): "top" | "left" | "right" | null {
-  return edge === "floating" ? null : edge;
 }
 
 function mapSession(session: BackendSession): SessionView {
