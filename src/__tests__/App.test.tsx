@@ -13,6 +13,8 @@ const { invokeMock, listenMock } = vi.hoisted(() => ({
   listenMock: vi.fn(),
 }));
 
+const setPointerCaptureMock = vi.fn();
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
 }));
@@ -44,6 +46,11 @@ describe("App", () => {
     listenMock.mockReset();
     listenMock.mockRejectedValue(new Error("not running in Tauri"));
     window.history.pushState({}, "", "/");
+    setPointerCaptureMock.mockReset();
+    Object.defineProperty(Element.prototype, "setPointerCapture", {
+      configurable: true,
+      value: setPointerCaptureMock,
+    });
   });
 
   afterEach(() => {
@@ -219,5 +226,53 @@ describe("App", () => {
 
     expect(screen.getByText(/已完成/)).toBeInTheDocument();
     expect(getSessionsCalls).toBeGreaterThanOrEqual(2);
+  });
+
+  it("uses floating when snap_window returns null and sends edge null afterwards", async () => {
+    vi.useFakeTimers();
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "set_window_mode") {
+        return Promise.resolve();
+      }
+
+      if (command === "snap_window") {
+        return Promise.resolve(null);
+      }
+
+      return Promise.reject(new Error("not running in Tauri"));
+    });
+
+    render(<App />);
+
+    const island = screen.getByLabelText("Codex Island", { selector: ".island" });
+    fireEvent.pointerDown(island, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      screenX: 100,
+      screenY: 100,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+      mode: "island",
+      edge: null,
+      initial: false,
+    });
+
+    fireEvent.pointerEnter(island.parentElement!);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS + 30);
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+      mode: "island_expanded",
+      edge: null,
+      initial: false,
+    });
   });
 });

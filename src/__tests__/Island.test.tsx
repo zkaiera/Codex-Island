@@ -192,4 +192,32 @@ describe("Island", () => {
     expect(invokeMock).toHaveBeenCalledWith("snap_window");
     await waitFor(() => expect(onSnapEdgeChange).toHaveBeenCalledWith("left"));
   });
+
+  it("sends edge null when the current snap edge is floating", async () => {
+    invokeMock.mockResolvedValue(null);
+
+    render(
+      <Island
+        sessions={[]}
+        onHide={() => undefined}
+        snapEdge="floating"
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByLabelText("Codex Island"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      screenX: 100,
+      screenY: 100,
+    });
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+        mode: "island",
+        edge: null,
+        initial: false,
+      }),
+    );
+  });
 });

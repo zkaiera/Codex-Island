@@ -55,7 +55,7 @@ fn set_window_mode(
     let _ = windowing::apply_window_layout(
         &app,
         windowing::WindowMode::from_name(&mode),
-        edge.unwrap_or(windowing::SnapEdge::Top),
+        edge,
         initial,
     );
 }

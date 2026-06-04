@@ -18,7 +18,7 @@ type BackendSession = {
 
 const SESSIONS_CHANGED_EVENT = "sessions:changed";
 const SESSION_POLL_MS = 2000;
-type SnapEdge = "top" | "left" | "right";
+type SnapEdge = "top" | "left" | "right" | "floating";
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionView[]>(() =>
@@ -101,7 +101,7 @@ export default function App() {
     const initial = !didApplyInitialLayout.current;
     didApplyInitialLayout.current = true;
 
-    void invoke("set_window_mode", { mode, edge: snapEdge, initial }).catch(() => {
+    void invoke("set_window_mode", { mode, edge: toBackendEdge(snapEdge), initial }).catch(() => {
       // 普通浏览器预览没有 Tauri 窗口。
     });
   }, [windowModeExpanded, snapEdge]);
@@ -164,6 +164,10 @@ export default function App() {
       />
     </main>
   );
+}
+
+function toBackendEdge(edge: SnapEdge): "top" | "left" | "right" | null {
+  return edge === "floating" ? null : edge;
 }
 
 function mapSession(session: BackendSession): SessionView {

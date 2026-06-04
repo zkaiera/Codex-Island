@@ -20,7 +20,7 @@ type IslandProps = {
   maxVisibleCollapsed?: number;
 };
 
-type SnapEdge = "top" | "left" | "right";
+type SnapEdge = "top" | "left" | "right" | "floating";
 
 export function Island({
   sessions,
@@ -187,7 +187,7 @@ export function Island({
     try {
       await invoke("set_window_mode", {
         mode: "island",
-        edge: snapEdge,
+        edge: toBackendEdge(snapEdge),
         initial: false,
       });
       await getCurrentWindow().startDragging();
@@ -203,8 +203,13 @@ export function Island({
   }
 
   async function snapAfterDrag() {
-    return invoke<SnapEdge>("snap_window")
+    return invoke<SnapEdge | null>("snap_window")
       .then((edge) => {
+        if (edge === null) {
+          onSnapEdgeChange?.("floating");
+          return;
+        }
+
         if (edge) {
           onSnapEdgeChange?.(edge);
           setSnapping(true);
@@ -267,6 +272,10 @@ export function Island({
       ) : null}
     </div>
   );
+}
+
+function toBackendEdge(edge: SnapEdge): "top" | "left" | "right" | null {
+  return edge === "floating" ? null : edge;
 }
 
 function calculateVisibleCount() {
