@@ -120,6 +120,47 @@ describe("App", () => {
     expect(await screen.findByText("web3-agent-research")).toBeInTheDocument();
   });
 
+  it("waits briefly before returning the window to collapsed mode", async () => {
+    vi.useFakeTimers();
+    window.history.pushState({}, "", "/?demo=1");
+
+    render(<App />);
+
+    const wrapper = screen.getByLabelText("Codex Island", { selector: ".island" }).parentElement!;
+    fireEvent.pointerEnter(wrapper);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+      mode: "island_expanded",
+      edge: "top",
+      initial: false,
+    });
+
+    fireEvent.pointerLeave(wrapper, { relatedTarget: document.body });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+
+    expect(invokeMock).not.toHaveBeenCalledWith("set_window_mode", {
+      mode: "island",
+      edge: "top",
+      initial: false,
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60);
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
+      mode: "island",
+      edge: "top",
+      initial: false,
+    });
+  });
+
   it("polls backend sessions when no change event arrives", async () => {
     vi.useFakeTimers();
     listenMock.mockResolvedValue(() => undefined);

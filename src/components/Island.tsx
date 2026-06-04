@@ -6,6 +6,10 @@ import { SessionList } from "./SessionList";
 import { SessionPill } from "./SessionPill";
 import type { SessionView } from "./session";
 
+const HOVER_EXPAND_DELAY_MS = 70;
+const HOVER_COLLAPSE_DELAY_MS = 220;
+const SNAP_FEEDBACK_MS = 360;
+
 type IslandProps = {
   sessions: SessionView[];
   onHide: (sessionId: string) => void;
@@ -104,7 +108,7 @@ export function Island({
     expandTimer.current = window.setTimeout(() => {
       expandTimer.current = null;
       updateExpanded(true);
-    }, 90);
+    }, HOVER_EXPAND_DELAY_MS);
   }
 
   function queueCollapse() {
@@ -128,7 +132,20 @@ export function Island({
     collapseTimer.current = window.setTimeout(() => {
       collapseTimer.current = null;
       updateExpanded(false);
-    }, 280);
+    }, HOVER_COLLAPSE_DELAY_MS);
+  }
+
+  function handlePointerLeave(event: PointerEvent<HTMLDivElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      if (collapseTimer.current !== null) {
+        window.clearTimeout(collapseTimer.current);
+        collapseTimer.current = null;
+      }
+      return;
+    }
+
+    queueCollapse();
   }
 
   async function handleDragStart(event: PointerEvent<HTMLDivElement>) {
@@ -184,7 +201,7 @@ export function Island({
           snapTimer.current = window.setTimeout(() => {
             snapTimer.current = null;
             setSnapping(false);
-          }, 360);
+          }, SNAP_FEEDBACK_MS);
         }
       })
       .catch(() => {
@@ -205,7 +222,7 @@ export function Island({
         .join(" ")}
       data-tauri-drag-region="false"
       onPointerEnter={queueExpand}
-      onPointerLeave={queueCollapse}
+      onPointerLeave={handlePointerLeave}
     >
       <div
         className="island"
@@ -227,7 +244,10 @@ export function Island({
       </div>
 
       {orderedSessions.length > 0 ? (
-        <div className={`island-panel${expanded ? " island-panel--open" : ""}`}>
+        <div
+          className={`island-panel${expanded ? " island-panel--open" : ""}`}
+          onPointerEnter={queueExpand}
+        >
           <div className="island-panel__header">{orderedSessions.length} active</div>
           <SessionList sessions={orderedSessions} onHide={onHide} />
         </div>

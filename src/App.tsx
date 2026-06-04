@@ -17,6 +17,7 @@ type BackendSession = {
 
 const SESSIONS_CHANGED_EVENT = "sessions:changed";
 const SESSION_POLL_MS = 2000;
+const WINDOW_MODE_SHRINK_DELAY_MS = 220;
 type SnapEdge = "top" | "left" | "right";
 
 export default function App() {
@@ -146,7 +147,7 @@ export default function App() {
     shrinkTimer.current = window.setTimeout(() => {
       shrinkTimer.current = null;
       setWindowModeExpanded(false);
-    }, 260);
+    }, WINDOW_MODE_SHRINK_DELAY_MS);
   }
 
   return (

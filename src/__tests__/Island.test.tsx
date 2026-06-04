@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Island } from "../components/Island";
@@ -92,6 +92,70 @@ describe("Island", () => {
     fireEvent.pointerLeave(screen.getByLabelText("Codex Island").parentElement!);
     await vi.advanceTimersByTimeAsync(300);
     expect(onExpandedChange).toHaveBeenCalledWith(false);
+  });
+
+  it("keeps expanded while the pointer moves from the island body into the panel", async () => {
+    vi.useFakeTimers();
+    const onExpandedChange = vi.fn();
+    const oneSession = makeSession("one", "2026-06-03T09:00:00.000Z");
+
+    render(
+      <Island
+        sessions={[oneSession]}
+        onHide={() => undefined}
+        onExpandedChange={onExpandedChange}
+      />,
+    );
+
+    const wrapper = screen.getByLabelText("Codex Island").parentElement!;
+
+    fireEvent.pointerEnter(wrapper);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    const panel = screen.getByText("1 active").parentElement!;
+    fireEvent.pointerLeave(wrapper, { relatedTarget: panel });
+    fireEvent.pointerEnter(panel);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(320);
+    });
+
+    expect(onExpandedChange).not.toHaveBeenCalledWith(false);
+    expect(screen.getByLabelText("Codex Island")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("collapses only after the pointer leaves the whole island area", async () => {
+    vi.useFakeTimers();
+    const onExpandedChange = vi.fn();
+    const oneSession = makeSession("one", "2026-06-03T09:00:00.000Z");
+
+    render(
+      <Island
+        sessions={[oneSession]}
+        onHide={() => undefined}
+        onExpandedChange={onExpandedChange}
+      />,
+    );
+
+    const wrapper = screen.getByLabelText("Codex Island").parentElement!;
+
+    fireEvent.pointerEnter(wrapper);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    fireEvent.pointerLeave(wrapper, { relatedTarget: document.body });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(onExpandedChange).not.toHaveBeenCalledWith(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120);
+    });
+    expect(onExpandedChange).toHaveBeenCalledWith(false);
+    expect(screen.getByLabelText("Codex Island")).toHaveAttribute("aria-expanded", "false");
   });
 
   it("drags through the native window API and reports the snapped edge", async () => {
