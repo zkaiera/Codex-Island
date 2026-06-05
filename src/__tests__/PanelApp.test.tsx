@@ -66,6 +66,7 @@ describe("PanelApp", () => {
     });
 
     expect(screen.getByText("panel-project")).toBeInTheDocument();
+    expect(screen.getByRole("list")).not.toHaveClass("session-list--scrollable");
     expect(screen.getByTestId("panel-shell")).toHaveClass("app-shell--panel-open");
     expect(screen.getByTestId("panel-shell")).toHaveClass("app-shell--panel-edge-right");
 
@@ -91,5 +92,20 @@ describe("PanelApp", () => {
     });
 
     expect(invokeMock).toHaveBeenCalledWith("hide_session_panel_window");
+  });
+
+  it("only enables list scrolling when the backend reports capped content", async () => {
+    render(<PanelApp />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      listeners.get("session-panel:open")?.({ payload: { edge: "right", scrollable: true } });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("list")).toHaveClass("session-list--scrollable");
   });
 });

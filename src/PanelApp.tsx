@@ -12,6 +12,7 @@ import { useVisibleSessions } from "./sessionData";
 
 type PanelOpenPayload = {
   edge: SnapEdge | null;
+  scrollable?: boolean;
 };
 
 const PANEL_OPEN_EVENT = "session-panel:open";
@@ -21,6 +22,7 @@ export function PanelApp() {
   const { visibleSessions, hideSession, refreshSessions } = useVisibleSessions();
   const [open, setOpen] = useState(false);
   const [edge, setEdge] = useState<SnapEdge>("top");
+  const [scrollable, setScrollable] = useState(false);
   const hoverTimer = useRef<number | null>(null);
   const hideTimer = useRef<number | null>(null);
 
@@ -38,6 +40,7 @@ export function PanelApp() {
 
           clearHideTimer();
           setEdge(event.payload.edge ?? "floating");
+          setScrollable(event.payload.scrollable ?? false);
           setOpen(true);
           void refreshSessions().catch(() => {
             // 普通浏览器预览没有 Tauri 后端。
@@ -133,7 +136,7 @@ export function PanelApp() {
         onPointerLeave={handlePointerLeave}
       >
         <div className="panel-card__header">{visibleSessions.length} active</div>
-        <SessionList sessions={visibleSessions} onHide={hideSession} />
+        <SessionList sessions={visibleSessions} onHide={hideSession} scrollable={scrollable} />
       </div>
     </main>
   );

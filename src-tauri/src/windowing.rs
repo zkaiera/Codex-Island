@@ -7,11 +7,11 @@ use tauri::{
 const SIDE_SNAP_BAND_PX: i32 = 192;
 const TOP_SNAP_BAND_PX: i32 = 72;
 pub const PANEL_WIDTH_PX: i32 = 390;
-pub const PANEL_HEIGHT_PX: i32 = 520;
+pub const PANEL_INITIAL_HEIGHT_PX: i32 = 520;
 const PANEL_GAP_PX: i32 = 10;
 const PANEL_MIN_HEIGHT_PX: i32 = 128;
 const PANEL_HEADER_HEIGHT_PX: i32 = 44;
-const PANEL_SESSION_ROW_HEIGHT_PX: i32 = 56;
+const PANEL_SESSION_ROW_HEIGHT_PX: i32 = 80;
 const PANEL_VERTICAL_CHROME_PX: i32 = 24;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -331,9 +331,21 @@ pub fn panel_frame_for_anchor(
     edge: Option<SnapEdge>,
     session_count: usize,
 ) -> WindowFrame {
+    if edge.is_none() {
+        return floating_panel_frame_for_anchor(island, work_area, session_count);
+    }
+
+    let desired_height = panel_height_for_session_count(session_count);
+    let max_height = match edge {
+        Some(SnapEdge::Top) => {
+            work_area.y + work_area.height - (island.y + island.height + PANEL_GAP_PX)
+        }
+        Some(SnapEdge::Left | SnapEdge::Right) => work_area.height,
+        None => unreachable!("floating panel frame is handled above"),
+    };
     let layout = WindowLayout {
         width: PANEL_WIDTH_PX,
-        height: panel_height_for_session_count(session_count),
+        height: desired_height.min(max_height.max(1)),
     };
     let island_center_x = island.x + island.width / 2;
     let island_center_y = island.y + island.height / 2;
@@ -363,12 +375,47 @@ pub fn panel_frame_for_anchor(
     }
 }
 
+fn floating_panel_frame_for_anchor(
+    island: WindowFrame,
+    work_area: Rect,
+    session_count: usize,
+) -> WindowFrame {
+    let desired_height = panel_height_for_session_count(session_count);
+    let island_center_x = island.x + island.width / 2;
+    let below_y = island.y + island.height + PANEL_GAP_PX;
+    let above_bottom = island.y - PANEL_GAP_PX;
+    let available_below = (work_area.y + work_area.height - below_y).max(0);
+    let available_above = (above_bottom - work_area.y).max(0);
+    let opens_below = available_below >= available_above;
+    let max_height = if opens_below {
+        available_below
+    } else {
+        available_above
+    };
+    let height = desired_height.min(max_height.max(1));
+    let max_x = work_area.x + work_area.width - PANEL_WIDTH_PX;
+    let max_y = work_area.y + work_area.height - height;
+    let x = clamp(island_center_x - PANEL_WIDTH_PX / 2, work_area.x, max_x);
+    let y = if opens_below {
+        below_y
+    } else {
+        above_bottom - height
+    };
+
+    WindowFrame {
+        x,
+        y: clamp(y, work_area.y, max_y),
+        width: PANEL_WIDTH_PX,
+        height,
+    }
+}
+
 pub fn panel_height_for_session_count(session_count: usize) -> i32 {
     let row_count = session_count.max(1) as i32;
     let content_height =
         PANEL_HEADER_HEIGHT_PX + PANEL_VERTICAL_CHROME_PX + PANEL_SESSION_ROW_HEIGHT_PX * row_count;
 
-    clamp(content_height, PANEL_MIN_HEIGHT_PX, PANEL_HEIGHT_PX)
+    content_height.max(PANEL_MIN_HEIGHT_PX)
 }
 
 pub fn point_is_inside_frame(point: (i32, i32), frame: WindowFrame) -> bool {

@@ -276,16 +276,17 @@ fn top_panel_opens_below_the_stable_status_island() {
             x: 1085,
             y: 54,
             width: 390,
-            height: 128,
+            height: 148,
         }
     );
 }
 
 #[test]
 fn panel_height_tracks_visible_session_count() {
-    assert_eq!(panel_height_for_session_count(1), 128);
-    assert_eq!(panel_height_for_session_count(3), 236);
-    assert_eq!(panel_height_for_session_count(20), 520);
+    assert_eq!(panel_height_for_session_count(1), 148);
+    assert_eq!(panel_height_for_session_count(2), 228);
+    assert_eq!(panel_height_for_session_count(3), 308);
+    assert_eq!(panel_height_for_session_count(20), 1668);
 }
 
 #[test]
@@ -313,24 +314,50 @@ fn side_panels_open_next_to_the_vertical_status_island() {
         panel_frame_for_anchor(left_island, work_area, Some(SnapEdge::Left), 1),
         WindowFrame {
             x: 54,
-            y: 626,
+            y: 616,
             width: 390,
-            height: 128,
+            height: 148,
         }
     );
     assert_eq!(
         panel_frame_for_anchor(right_island, work_area, Some(SnapEdge::Right), 1),
         WindowFrame {
             x: 2116,
-            y: 626,
+            y: 616,
             width: 390,
-            height: 128,
+            height: 148,
         }
     );
 }
 
 #[test]
-fn floating_panel_keeps_the_status_island_fixed_and_clamps_to_screen() {
+fn side_panel_height_is_limited_by_work_area() {
+    let work_area = Rect {
+        x: 0,
+        y: 0,
+        width: 2560,
+        height: 1380,
+    };
+    let right_island = WindowFrame {
+        x: 2516,
+        y: 580,
+        width: 44,
+        height: 220,
+    };
+
+    assert_eq!(
+        panel_frame_for_anchor(right_island, work_area, Some(SnapEdge::Right), 200),
+        WindowFrame {
+            x: 2116,
+            y: 0,
+            width: 390,
+            height: 1380,
+        }
+    );
+}
+
+#[test]
+fn floating_panel_uses_available_space_around_the_status_island() {
     let work_area = Rect {
         x: 0,
         y: 0,
@@ -348,9 +375,35 @@ fn floating_panel_keeps_the_status_island_fixed_and_clamps_to_screen() {
         panel_frame_for_anchor(island, work_area, None, 1),
         WindowFrame {
             x: 410,
-            y: 472,
+            y: 382,
             width: 390,
-            height: 128,
+            height: 148,
+        }
+    );
+}
+
+#[test]
+fn floating_panel_height_is_limited_to_the_larger_vertical_slot() {
+    let work_area = Rect {
+        x: 0,
+        y: 0,
+        width: 800,
+        height: 600,
+    };
+    let island = WindowFrame {
+        x: 290,
+        y: 260,
+        width: 220,
+        height: 44,
+    };
+
+    assert_eq!(
+        panel_frame_for_anchor(island, work_area, None, 20),
+        WindowFrame {
+            x: 205,
+            y: 314,
+            width: 390,
+            height: 286,
         }
     );
 }

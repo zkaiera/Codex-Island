@@ -3,11 +3,17 @@ import { formatRelativeTime, SOURCE_LABELS, STATUS_LABELS, type SessionView } fr
 type SessionListProps = {
   sessions: SessionView[];
   onHide: (sessionId: string) => void;
+  scrollable?: boolean;
 };
 
-export function SessionList({ sessions, onHide }: SessionListProps) {
+export function SessionList({ sessions, onHide, scrollable = false }: SessionListProps) {
   return (
-    <div className="session-list" role="list">
+    <div
+      className={["session-list", scrollable ? "session-list--scrollable" : ""]
+        .filter(Boolean)
+        .join(" ")}
+      role="list"
+    >
       {sessions.map((session) => (
         <div key={session.sessionId} className="session-list__row" role="listitem">
           <div className="session-list__meta">

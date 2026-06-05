@@ -28,6 +28,7 @@ const PANEL_CURSOR_OUTSIDE_TICKS_TO_CLOSE: u8 = 3;
 #[derive(Clone, Serialize)]
 struct PanelOpenPayload {
     edge: Option<windowing::SnapEdge>,
+    scrollable: bool,
 }
 
 #[tauri::command]
@@ -139,10 +140,12 @@ fn show_session_panel(
         edge,
         visible_session_count,
     );
+    let scrollable =
+        frame.height < windowing::panel_height_for_session_count(visible_session_count);
 
     windowing::apply_window_frame(&panel_window, frame);
     let _ = panel_window.show();
-    let _ = panel_window.emit(PANEL_OPEN_EVENT, PanelOpenPayload { edge });
+    let _ = panel_window.emit(PANEL_OPEN_EVENT, PanelOpenPayload { edge, scrollable });
 }
 
 #[tauri::command]
@@ -309,7 +312,7 @@ fn setup_panel_window(app: &mut tauri::App) -> tauri::Result<()> {
     .title("Codex Island Panel")
     .inner_size(
         windowing::PANEL_WIDTH_PX as f64,
-        windowing::PANEL_HEIGHT_PX as f64,
+        windowing::PANEL_INITIAL_HEIGHT_PX as f64,
     )
     .decorations(false)
     .transparent(true)

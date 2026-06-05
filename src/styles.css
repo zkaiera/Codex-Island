@@ -295,11 +295,17 @@ body {
 
 .session-list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  overflow-y: auto;
+  min-height: 0;
+  overflow-y: hidden;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgb(150 158 171 / 38%) transparent;
+}
+
+.session-list--scrollable {
+  overflow-y: auto;
 }
 
 .session-list::-webkit-scrollbar {
@@ -327,6 +333,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
+  min-height: 80px;
   padding: 10px 18px;
   border-top: 1px solid rgb(255 255 255 / 6%);
 }

@@ -1,7 +1,8 @@
 param(
   [string] $OutputDir = (Join-Path $env:TEMP "codex-island-visual-e2e"),
   [switch] $NoBackdrop,
-  [switch] $AllowInvisible
+  [switch] $AllowInvisible,
+  [int] $SessionCount = 8
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,8 +54,8 @@ public static class NativeMethods {
 [NativeMethods]::SetProcessDPIAware() | Out-Null
 
 $Exe = Join-Path $env:LOCALAPPDATA "Codex Island\codex-island.exe"
-$StateDir = Join-Path $env:LOCALAPPDATA "CodexIsland\sessions"
-$SessionPath = Join-Path $StateDir "codex-island-visual-e2e.json"
+$StateDir = Join-Path $OutputDir "state\sessions"
+$SessionPrefix = "codex-island-visual-e2e"
 $VirtualScreen = [System.Windows.Forms.SystemInformation]::VirtualScreen
 
 function Reset-OutputDir {
@@ -81,24 +82,38 @@ function Show-StaticBackdrop {
   $form
 }
 
-function Write-TestSession {
-  New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
-  $timestamp = (Get-Date).ToUniversalTime().ToString("o")
-  $record = [ordered]@{
-    session_id = "codex-island-visual-e2e"
-    turn_id = $null
-    cwd = "C:\work\codex-island-visual-e2e"
-    title = "visual-e2e-visible-panel"
-    source = "windows"
-    distro = $null
-    last_event = "SessionStart"
-    last_tool = $null
-    ui_state = "running"
-    created_at = $timestamp
-    updated_at = $timestamp
+function Write-TestSessions {
+  if ($SessionCount -lt 1) {
+    throw "SessionCount must be at least 1."
   }
 
-  $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $SessionPath -Encoding UTF8
+  New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
+  Get-ChildItem -LiteralPath $StateDir -Filter "$SessionPrefix*.json" -ErrorAction SilentlyContinue |
+    Remove-Item -Force
+
+  $now = (Get-Date).ToUniversalTime()
+  for ($index = 1; $index -le $SessionCount; $index++) {
+    $createdAt = $now.AddSeconds(-1 * ($SessionCount - $index)).ToString("o")
+    $updatedAt = $now.ToString("o")
+    $record = [ordered]@{
+      session_id = "$SessionPrefix-$index"
+      turn_id = $null
+      cwd = "C:\work\codex-island-visual-e2e-$index"
+      title = "visual-e2e-session-$index"
+      source = "windows"
+      distro = $null
+      last_event = "SessionStart"
+      last_tool = $null
+      ui_state = "running"
+      created_at = $createdAt
+      updated_at = $updatedAt
+    }
+
+    $path = Join-Path $StateDir "$SessionPrefix-$index.json"
+    $json = $record | ConvertTo-Json -Depth 5
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($path, $json, $utf8NoBom)
+  }
 }
 
 function Get-WindowTitle([IntPtr] $handle) {
@@ -272,7 +287,17 @@ function Start-App {
 
   Get-Process codex-island -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep -Milliseconds 400
-  Start-Process -FilePath $Exe
+  $previousStateDirOverride = $env:CODEX_ISLAND_STATE_DIR
+  try {
+    $env:CODEX_ISLAND_STATE_DIR = $StateDir
+    Start-Process -FilePath $Exe
+  } finally {
+    if ($null -eq $previousStateDirOverride) {
+      Remove-Item Env:\CODEX_ISLAND_STATE_DIR -ErrorAction SilentlyContinue
+    } else {
+      $env:CODEX_ISLAND_STATE_DIR = $previousStateDirOverride
+    }
+  }
   $main = Wait-Window "Codex Island" 8000
   [NativeMethods]::SetForegroundWindow($main.Handle) | Out-Null
   $main
@@ -354,10 +379,66 @@ function Get-PanelWindowHeightSignal($cycles) {
   $signals | Sort-Object Height | Select-Object -First 1
 }
 
+function Get-PanelScrollbarSignal($cycles) {
+  $signals = New-Object System.Collections.Generic.List[object]
+  foreach ($cycle in $cycles) {
+    foreach ($capture in $cycle.Captures) {
+      $panel = @($capture.Windows) | Where-Object { $_.Title -eq "Codex Island Panel" } | Select-Object -First 1
+      if ($null -eq $panel) {
+        continue
+      }
+
+      $bitmap = [System.Drawing.Bitmap]::FromFile($capture.Screenshot)
+      try {
+        $xStart = [Math]::Max($panel.Right - 9, $panel.X)
+        $xEnd = [Math]::Max($panel.Right - 5, $xStart)
+        $yStart = [Math]::Min($panel.Y + 36, $panel.Bottom - 1)
+        $yEnd = [Math]::Max($panel.Bottom - 14, $yStart)
+        $samples = 0
+        $scrollbarPixels = 0
+
+        for ($x = $xStart; $x -le $xEnd; $x++) {
+          for ($y = $yStart; $y -le $yEnd; $y += 2) {
+            if ($x -lt 0 -or $x -ge $bitmap.Width -or $y -lt 0 -or $y -ge $bitmap.Height) {
+              continue
+            }
+
+            $pixel = $bitmap.GetPixel($x, $y)
+            $average = ($pixel.R + $pixel.G + $pixel.B) / 3
+            $maxChannel = [Math]::Max($pixel.R, [Math]::Max($pixel.G, $pixel.B))
+            $minChannel = [Math]::Min($pixel.R, [Math]::Min($pixel.G, $pixel.B))
+            $samples++
+            if ($average -ge 46 -and $average -le 160 -and ($maxChannel - $minChannel) -le 42) {
+              $scrollbarPixels++
+            }
+          }
+        }
+
+        $ratio = 0
+        if ($samples -gt 0) {
+          $ratio = [Math]::Round($scrollbarPixels / $samples, 4)
+        }
+
+        $signals.Add([pscustomobject]@{
+          Cycle = $cycle.Cycle
+          AtMs = $capture.AtMs
+          Screenshot = $capture.Screenshot
+          Samples = $samples
+          ScrollbarPixelRatio = $ratio
+        })
+      } finally {
+        $bitmap.Dispose()
+      }
+    }
+  }
+
+  $signals | Sort-Object ScrollbarPixelRatio -Descending | Select-Object -First 1
+}
+
 $backdrop = $null
 try {
   Reset-OutputDir
-  Write-TestSession
+  Write-TestSessions
   if (-not $NoBackdrop) {
     $backdrop = Show-StaticBackdrop
   }
@@ -371,18 +452,19 @@ try {
   $cycles = @($firstCycle, $secondCycle)
   $bestPanelSignal = Get-BestPanelSignal $cycles
   $panelWindowHeightSignal = Get-PanelWindowHeightSignal $cycles
+  $panelScrollbarSignal = Get-PanelScrollbarSignal $cycles
   $visualPanelDetected =
     $null -ne $bestPanelSignal -and
     $bestPanelSignal.AverageRgbDelta -ge 32 -and
     $bestPanelSignal.ChangedSampleRatio -ge 0.18
-  $compactPanelDetected =
-    $null -ne $panelWindowHeightSignal -and
-    $panelWindowHeightSignal.Height -ge 80 -and
-    $panelWindowHeightSignal.Height -le 160
+  $noPanelScrollbarDetected =
+    $null -ne $panelScrollbarSignal -and
+    $panelScrollbarSignal.ScrollbarPixelRatio -le 0.08
 
   $summary = [pscustomobject]@{
     Exe = $Exe
     OutputDir = $OutputDir
+    SessionCount = $SessionCount
     UsedBackdrop = -not $NoBackdrop
     VirtualScreen = [pscustomobject]@{
       X = $VirtualScreen.Left
@@ -394,15 +476,16 @@ try {
     Cycles = $cycles
     BestPanelSignal = $bestPanelSignal
     PanelWindowHeightSignal = $panelWindowHeightSignal
+    PanelScrollbarSignal = $panelScrollbarSignal
     VisualPanelDetected = $visualPanelDetected
-    CompactPanelDetected = $compactPanelDetected
+    NoPanelScrollbarDetected = $noPanelScrollbarDetected
     FinalWindows = @(Get-AppWindows) | Select-Object Title, X, Y, Width, Height, Right, Bottom
   }
 
   $json = $summary | ConvertTo-Json -Depth 12
   $json
 
-  if (-not $AllowInvisible -and (-not $visualPanelDetected -or -not $compactPanelDetected)) {
+  if (-not $AllowInvisible -and (-not $visualPanelDetected -or -not $noPanelScrollbarDetected)) {
     throw $json
   }
 } finally {
