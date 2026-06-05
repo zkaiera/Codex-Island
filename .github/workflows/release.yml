@@ -1,0 +1,174 @@
+name: 发布 Windows 安装包
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-windows-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-installer:
+    name: 构建并发布 Windows 安装包
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: 检出 main 分支提交
+        uses: actions/checkout@v4
+
+      - name: 设置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: 设置 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 解析程序版本
+        id: version
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriConfig = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $tauriVersion = $tauriConfig.version
+          $productName = $tauriConfig.productName
+          $cargoVersionLine = Select-String -Path src-tauri/Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
+          $cargoVersion = $cargoVersionLine.Matches.Groups[1].Value
+
+          if (-not ($packageVersion -match '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')) {
+            throw "package.json 版本格式必须类似 1.2.3 或 1.2.3-beta.1，当前值为：$packageVersion"
+          }
+
+          if ($tauriVersion -ne $packageVersion) {
+            throw "src-tauri/tauri.conf.json 版本 '$tauriVersion' 与 package.json 版本 '$packageVersion' 不一致。"
+          }
+
+          if ($cargoVersion -ne $packageVersion) {
+            throw "src-tauri/Cargo.toml 版本 '$cargoVersion' 与 package.json 版本 '$packageVersion' 不一致。"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($productName)) {
+            $productName = "Codex Island"
+          }
+
+          $tag = "v$packageVersion"
+          $title = "$productName $tag"
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "title=$title" >> $env:GITHUB_OUTPUT
+          "version=$packageVersion" >> $env:GITHUB_OUTPUT
+
+      - name: 生成 Release 说明
+        id: notes
+        shell: pwsh
+        run: |
+          $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
+          $pr = $null
+
+          try {
+            $pullsJson = gh api `
+              -H "Accept: application/vnd.github+json" `
+              "/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls"
+
+            $pulls = $pullsJson | ConvertFrom-Json
+            if ($pulls) {
+              if ($pulls -is [array]) {
+                $pr = $pulls[0]
+              } else {
+                $pr = $pulls
+              }
+            }
+          } catch {
+            Write-Host "未能读取当前提交关联的 PR，将使用最新 commit message。"
+          }
+
+          $notes = ""
+          if ($pr) {
+            $notes = [string]$pr.body
+          }
+
+          if ([string]::IsNullOrWhiteSpace($notes)) {
+            $notes = git log -1 --pretty=%B
+          }
+
+          Set-Content -Path $notesPath -Value $notes -Encoding utf8
+          "path=$notesPath" >> $env:GITHUB_OUTPUT
+
+      - name: 运行测试
+        run: pnpm test
+
+      - name: 构建 Windows 安装包
+        run: pnpm bundle:windows
+
+      - name: 收集发布产物
+        id: asset
+        shell: pwsh
+        run: |
+          $bundleDir = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
+          $installer = Get-ChildItem -Path $bundleDir -Filter "*_${{ steps.version.outputs.version }}_x64-setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+          if (-not $installer) {
+            throw "未在 $bundleDir 下找到 NSIS 安装包。"
+          }
+
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          $assetName = "Codex-Island_${{ steps.version.outputs.version }}_x64-setup.exe"
+          $assetPath = Join-Path "release-assets" $assetName
+          Copy-Item -Path $installer.FullName -Destination $assetPath -Force
+
+          "path=$assetPath" >> $env:GITHUB_OUTPUT
+
+      - name: 上传 workflow 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-island-windows-installer
+          path: ${{ steps.asset.outputs.path }}
+          if-no-files-found: error
+
+      - name: 发布 GitHub Release
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $title = "${{ steps.version.outputs.title }}"
+          $notesPath = "${{ steps.notes.outputs.path }}"
+          $assetPath = "${{ steps.asset.outputs.path }}"
+          $target = "${{ github.sha }}"
+
+          gh release view $tag --json tagName *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+            gh release edit $tag --title $title --notes-file $notesPath --target $target --latest
+            if ($LASTEXITCODE -ne 0) {
+              throw "更新 GitHub Release 失败：$tag"
+            }
+
+            gh release upload $tag $assetPath --clobber
+            if ($LASTEXITCODE -ne 0) {
+              throw "上传 GitHub Release 安装包失败：$assetPath"
+            }
+          } else {
+            gh release create $tag $assetPath --title $title --notes-file $notesPath --target $target --latest
+            if ($LASTEXITCODE -ne 0) {
+              throw "创建 GitHub Release 失败：$tag"
+            }
+          }
