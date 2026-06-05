@@ -331,11 +331,21 @@ pub fn panel_frame_for_anchor(
     edge: Option<SnapEdge>,
     session_count: usize,
 ) -> WindowFrame {
+    panel_frame_for_anchor_with_scale(island, work_area, edge, session_count, 1.0)
+}
+
+pub fn panel_frame_for_anchor_with_scale(
+    island: WindowFrame,
+    work_area: Rect,
+    edge: Option<SnapEdge>,
+    session_count: usize,
+    scale_factor: f64,
+) -> WindowFrame {
     if edge.is_none() {
-        return floating_panel_frame_for_anchor(island, work_area, session_count);
+        return floating_panel_frame_for_anchor(island, work_area, session_count, scale_factor);
     }
 
-    let desired_height = panel_height_for_session_count(session_count);
+    let desired_height = panel_physical_height_for_session_count(session_count, scale_factor);
     let max_height = match edge {
         Some(SnapEdge::Top) => {
             work_area.y + work_area.height - (island.y + island.height + PANEL_GAP_PX)
@@ -379,8 +389,9 @@ fn floating_panel_frame_for_anchor(
     island: WindowFrame,
     work_area: Rect,
     session_count: usize,
+    scale_factor: f64,
 ) -> WindowFrame {
-    let desired_height = panel_height_for_session_count(session_count);
+    let desired_height = panel_physical_height_for_session_count(session_count, scale_factor);
     let island_center_x = island.x + island.width / 2;
     let below_y = island.y + island.height + PANEL_GAP_PX;
     let above_bottom = island.y - PANEL_GAP_PX;
@@ -416,6 +427,27 @@ pub fn panel_height_for_session_count(session_count: usize) -> i32 {
         PANEL_HEADER_HEIGHT_PX + PANEL_VERTICAL_CHROME_PX + PANEL_SESSION_ROW_HEIGHT_PX * row_count;
 
     content_height.max(PANEL_MIN_HEIGHT_PX)
+}
+
+pub fn panel_physical_height_for_session_count(session_count: usize, scale_factor: f64) -> i32 {
+    let scale_factor = normalized_scale_factor(scale_factor);
+    ((panel_height_for_session_count(session_count) as f64) * scale_factor).ceil() as i32
+}
+
+pub fn panel_height_overflows_frame(
+    frame_height: i32,
+    session_count: usize,
+    scale_factor: f64,
+) -> bool {
+    frame_height < panel_physical_height_for_session_count(session_count, scale_factor)
+}
+
+fn normalized_scale_factor(scale_factor: f64) -> f64 {
+    if scale_factor.is_finite() && scale_factor > 0.0 {
+        return scale_factor;
+    }
+
+    1.0
 }
 
 pub fn point_is_inside_frame(point: (i32, i32), frame: WindowFrame) -> bool {

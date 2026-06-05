@@ -119,12 +119,13 @@ fn show_session_panel(
     };
 
     let work_area = monitor.work_area();
+    let scale_factor = monitor.scale_factor();
     watcher::refresh_store_from_disk(&state.store, &paths::default_state_dir());
     let visible_session_count = {
         let store = state.store.read().expect("session store poisoned");
         store.recompute_visible(chrono::Utc::now()).len()
     };
-    let frame = windowing::panel_frame_for_anchor(
+    let frame = windowing::panel_frame_for_anchor_with_scale(
         windowing::WindowFrame {
             x: position.x,
             y: position.y,
@@ -139,9 +140,10 @@ fn show_session_panel(
         },
         edge,
         visible_session_count,
+        scale_factor,
     );
     let scrollable =
-        frame.height < windowing::panel_height_for_session_count(visible_session_count);
+        windowing::panel_height_overflows_frame(frame.height, visible_session_count, scale_factor);
 
     windowing::apply_window_frame(&panel_window, frame);
     let _ = panel_window.show();

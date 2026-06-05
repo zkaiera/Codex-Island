@@ -48,6 +48,9 @@ public static class NativeMethods {
 
   [DllImport("user32.dll")]
   public static extern bool SetCursorPos(int x, int y);
+
+  [DllImport("user32.dll", EntryPoint = "mouse_event")]
+  public static extern void MouseEvent(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
 }
 "@
 
@@ -57,6 +60,8 @@ $Exe = Join-Path $env:LOCALAPPDATA "Codex Island\codex-island.exe"
 $StateDir = Join-Path $OutputDir "state\sessions"
 $SessionPrefix = "codex-island-visual-e2e"
 $VirtualScreen = [System.Windows.Forms.SystemInformation]::VirtualScreen
+$MouseEventLeftDown = 0x0002
+$MouseEventLeftUp = 0x0004
 
 function Reset-OutputDir {
   if (Test-Path -LiteralPath $OutputDir) {
@@ -214,10 +219,68 @@ function Move-Cursor([int] $x, [int] $y) {
   [NativeMethods]::SetCursorPos($x, $y) | Out-Null
 }
 
+function Press-LeftMouse {
+  [NativeMethods]::MouseEvent($MouseEventLeftDown, 0, 0, 0, [UIntPtr]::Zero)
+}
+
+function Release-LeftMouse {
+  [NativeMethods]::MouseEvent($MouseEventLeftUp, 0, 0, 0, [UIntPtr]::Zero)
+}
+
 function Move-Away([int] $milliseconds = 800) {
   $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
   Move-Cursor ([int]($work.X + $work.Width / 2)) ([int]($work.Y + $work.Height - 10))
   Start-Sleep -Milliseconds $milliseconds
+}
+
+function Drag-MainWindowTo([string] $scenarioName, [int] $targetX, [int] $targetY) {
+  $main = Wait-CollapsedMain 9000
+  [NativeMethods]::SetForegroundWindow($main.Handle) | Out-Null
+
+  $startX = [int]($main.X + $main.Width / 2)
+  $startY = [int]($main.Y + $main.Height / 2)
+  Move-Cursor $startX $startY
+  Start-Sleep -Milliseconds 60
+  Press-LeftMouse
+  Start-Sleep -Milliseconds 80
+
+  $steps = 18
+  for ($step = 1; $step -le $steps; $step++) {
+    $nextX = [int]($startX + (($targetX - $startX) * $step / $steps))
+    $nextY = [int]($startY + (($targetY - $startY) * $step / $steps))
+    Move-Cursor $nextX $nextY
+    Start-Sleep -Milliseconds 18
+  }
+
+  Start-Sleep -Milliseconds 80
+  Release-LeftMouse
+  Start-Sleep -Milliseconds 1100
+
+  $settled = Wait-CollapsedMain 9000
+  [pscustomobject]@{
+    Scenario = $scenarioName
+    TargetX = $targetX
+    TargetY = $targetY
+    SettledWindow = $settled
+  }
+}
+
+function Move-IslandForScenario([string] $scenarioName) {
+  $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+  switch ($scenarioName) {
+    "left" {
+      return Drag-MainWindowTo $scenarioName ([int]($work.X + 18)) ([int]($work.Y + $work.Height / 2))
+    }
+    "right" {
+      return Drag-MainWindowTo $scenarioName ([int]($work.Right - 18)) ([int]($work.Y + $work.Height / 2))
+    }
+    "floating" {
+      return Drag-MainWindowTo $scenarioName ([int]($work.X + $work.Width / 2)) ([int]($work.Y + 260))
+    }
+    default {
+      throw "Unsupported scenario: $scenarioName"
+    }
+  }
 }
 
 function Capture-Screen([string] $name) {
@@ -435,6 +498,101 @@ function Get-PanelScrollbarSignal($cycles) {
   $signals | Sort-Object ScrollbarPixelRatio -Descending | Select-Object -First 1
 }
 
+function Count-VisibleSessionIndicators([string] $screenshotPath, $panel) {
+  if ($null -eq $panel) {
+    return [pscustomobject]@{
+      Count = 0
+      Centers = @()
+    }
+  }
+
+  $bitmap = [System.Drawing.Bitmap]::FromFile($screenshotPath)
+  try {
+    $xStart = [Math]::Max($panel.X + 14, $panel.X)
+    $xEnd = [Math]::Min($panel.X + 48, $panel.Right - 1)
+    $yStart = [Math]::Min($panel.Y + 38, $panel.Bottom - 1)
+    $yEnd = [Math]::Max($panel.Bottom - 4, $yStart)
+    $blueRows = New-Object System.Collections.Generic.List[int]
+
+    for ($y = $yStart; $y -le $yEnd; $y++) {
+      $rowHasIndicator = $false
+      for ($x = $xStart; $x -le $xEnd; $x++) {
+        if ($x -lt 0 -or $x -ge $bitmap.Width -or $y -lt 0 -or $y -ge $bitmap.Height) {
+          continue
+        }
+
+        $pixel = $bitmap.GetPixel($x, $y)
+        if ($pixel.B -ge 150 -and $pixel.G -ge 105 -and $pixel.G -le 190 -and $pixel.R -le 105 -and ($pixel.B - $pixel.R) -ge 80) {
+          $rowHasIndicator = $true
+          break
+        }
+      }
+
+      if ($rowHasIndicator) {
+        $blueRows.Add($y)
+      }
+    }
+
+    $centers = New-Object System.Collections.Generic.List[int]
+    if ($blueRows.Count -gt 0) {
+      $clusterStart = $blueRows[0]
+      $clusterEnd = $blueRows[0]
+      for ($index = 1; $index -lt $blueRows.Count; $index++) {
+        $row = $blueRows[$index]
+        if ($row -le $clusterEnd + 3) {
+          $clusterEnd = $row
+          continue
+        }
+
+        if (($clusterEnd - $clusterStart) -ge 4) {
+          $centers.Add([int](($clusterStart + $clusterEnd) / 2))
+        }
+        $clusterStart = $row
+        $clusterEnd = $row
+      }
+
+      if (($clusterEnd - $clusterStart) -ge 4) {
+        $centers.Add([int](($clusterStart + $clusterEnd) / 2))
+      }
+    }
+
+    [pscustomobject]@{
+      Count = $centers.Count
+      Centers = @($centers.ToArray())
+    }
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Get-PanelIndicatorSignals($cycles) {
+  $signals = New-Object System.Collections.Generic.List[object]
+  foreach ($cycle in $cycles) {
+    $best = $null
+    foreach ($capture in $cycle.Captures) {
+      $panel = @($capture.Windows) | Where-Object { $_.Title -eq "Codex Island Panel" } | Select-Object -First 1
+      $indicatorSignal = Count-VisibleSessionIndicators $capture.Screenshot $panel
+      $candidate = [pscustomobject]@{
+        Cycle = $cycle.Cycle
+        AtMs = $capture.AtMs
+        Screenshot = $capture.Screenshot
+        VisibleSessionIndicators = $indicatorSignal.Count
+        IndicatorCenters = $indicatorSignal.Centers
+      }
+
+      if ($null -eq $best -or $candidate.VisibleSessionIndicators -gt $best.VisibleSessionIndicators) {
+        $best = $candidate
+      }
+    }
+
+    if ($null -ne $best) {
+      $signals.Add($best)
+    }
+  }
+
+  @($signals.ToArray())
+}
+
 $backdrop = $null
 try {
   Reset-OutputDir
@@ -445,14 +603,24 @@ try {
 
   $main = Start-App
   Move-Away 900
+  $scenarioMoves = New-Object System.Collections.Generic.List[object]
+  $cycles = New-Object System.Collections.Generic.List[object]
+
   $mainBefore = Wait-CollapsedMain 9000
-  $firstCycle = Run-HoverCapture "cycle1" $mainBefore
-  $secondMainBefore = Wait-CollapsedMain 3000
-  $secondCycle = Run-HoverCapture "cycle2" $secondMainBefore
-  $cycles = @($firstCycle, $secondCycle)
+  $cycles.Add((Run-HoverCapture "top" $mainBefore))
+
+  foreach ($scenarioName in @("left", "right", "floating")) {
+    $scenarioMoves.Add((Move-IslandForScenario $scenarioName))
+    Move-Away 700
+    $scenarioMainBefore = Wait-CollapsedMain 9000
+    $cycles.Add((Run-HoverCapture $scenarioName $scenarioMainBefore))
+  }
+
+  $cycles = @($cycles.ToArray())
   $bestPanelSignal = Get-BestPanelSignal $cycles
   $panelWindowHeightSignal = Get-PanelWindowHeightSignal $cycles
   $panelScrollbarSignal = Get-PanelScrollbarSignal $cycles
+  $panelIndicatorSignals = @(Get-PanelIndicatorSignals $cycles)
   $visualPanelDetected =
     $null -ne $bestPanelSignal -and
     $bestPanelSignal.AverageRgbDelta -ge 32 -and
@@ -460,6 +628,9 @@ try {
   $noPanelScrollbarDetected =
     $null -ne $panelScrollbarSignal -and
     $panelScrollbarSignal.ScrollbarPixelRatio -le 0.08
+  $allSessionIndicatorsVisibleDetected =
+    $panelIndicatorSignals.Count -eq $cycles.Count -and
+    @($panelIndicatorSignals | Where-Object { $_.VisibleSessionIndicators -lt $SessionCount }).Count -eq 0
 
   $summary = [pscustomobject]@{
     Exe = $Exe
@@ -473,19 +644,22 @@ try {
       Height = $VirtualScreen.Height
     }
     MainBefore = $mainBefore
+    ScenarioMoves = @($scenarioMoves.ToArray())
     Cycles = $cycles
     BestPanelSignal = $bestPanelSignal
     PanelWindowHeightSignal = $panelWindowHeightSignal
     PanelScrollbarSignal = $panelScrollbarSignal
+    PanelIndicatorSignals = $panelIndicatorSignals
     VisualPanelDetected = $visualPanelDetected
     NoPanelScrollbarDetected = $noPanelScrollbarDetected
+    AllSessionIndicatorsVisibleDetected = $allSessionIndicatorsVisibleDetected
     FinalWindows = @(Get-AppWindows) | Select-Object Title, X, Y, Width, Height, Right, Bottom
   }
 
   $json = $summary | ConvertTo-Json -Depth 12
   $json
 
-  if (-not $AllowInvisible -and (-not $visualPanelDetected -or -not $noPanelScrollbarDetected)) {
+  if (-not $AllowInvisible -and (-not $visualPanelDetected -or -not $noPanelScrollbarDetected -or -not $allSessionIndicatorsVisibleDetected)) {
     throw $json
   }
 } finally {

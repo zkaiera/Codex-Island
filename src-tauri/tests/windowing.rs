@@ -1,6 +1,7 @@
 use codex_island_lib::windowing::{
     floating_position, frame_for_layout, initial_position_for_layout, layout_for, nearest_edge,
-    panel_frame_for_anchor, panel_height_for_session_count, point_is_inside_frame,
+    panel_frame_for_anchor, panel_frame_for_anchor_with_scale, panel_height_for_session_count,
+    panel_height_overflows_frame, panel_physical_height_for_session_count, point_is_inside_frame,
     primary_mouse_release_is_pending, snapped_position, Rect, SnapEdge, WindowFrame, WindowMode,
 };
 
@@ -286,7 +287,74 @@ fn panel_height_tracks_visible_session_count() {
     assert_eq!(panel_height_for_session_count(1), 148);
     assert_eq!(panel_height_for_session_count(2), 228);
     assert_eq!(panel_height_for_session_count(3), 308);
+    assert_eq!(panel_height_for_session_count(8), 708);
     assert_eq!(panel_height_for_session_count(20), 1668);
+}
+
+#[test]
+fn panel_height_is_scaled_from_css_to_physical_pixels() {
+    assert_eq!(panel_physical_height_for_session_count(8, 1.0), 708);
+    assert_eq!(panel_physical_height_for_session_count(8, 1.25), 885);
+    assert_eq!(panel_physical_height_for_session_count(8, 1.5), 1062);
+    assert_eq!(panel_physical_height_for_session_count(8, 0.0), 708);
+}
+
+#[test]
+fn top_panel_uses_scaled_height_when_the_screen_has_room() {
+    let work_area = Rect {
+        x: 0,
+        y: 0,
+        width: 2560,
+        height: 1380,
+    };
+    let island = WindowFrame {
+        x: 1170,
+        y: 0,
+        width: 220,
+        height: 44,
+    };
+
+    assert_eq!(
+        panel_frame_for_anchor_with_scale(island, work_area, Some(SnapEdge::Top), 8, 1.25),
+        WindowFrame {
+            x: 1085,
+            y: 54,
+            width: 390,
+            height: 885,
+        }
+    );
+}
+
+#[test]
+fn side_panel_uses_scaled_height_when_the_screen_has_room() {
+    let work_area = Rect {
+        x: 0,
+        y: 0,
+        width: 2560,
+        height: 1380,
+    };
+    let right_island = WindowFrame {
+        x: 2516,
+        y: 580,
+        width: 44,
+        height: 220,
+    };
+
+    assert_eq!(
+        panel_frame_for_anchor_with_scale(right_island, work_area, Some(SnapEdge::Right), 8, 1.25),
+        WindowFrame {
+            x: 2116,
+            y: 248,
+            width: 390,
+            height: 885,
+        }
+    );
+}
+
+#[test]
+fn scaled_height_only_scrolls_when_available_space_is_exhausted() {
+    assert!(!panel_height_overflows_frame(885, 8, 1.25));
+    assert!(panel_height_overflows_frame(884, 8, 1.25));
 }
 
 #[test]
