@@ -1,6 +1,6 @@
 [package]
 name = "codex-island"
-version = "0.1.11"
+version = "0.1.14"
 description = "A desktop status island for Codex sessions"
 authors = ["Codex Island"]
 edition = "2021"

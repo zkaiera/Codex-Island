@@ -69,11 +69,11 @@ describe("Island", () => {
     const older = makeSession("older", "2026-06-03T09:00:00.000Z");
     const newer = makeSession("newer", "2026-06-03T11:00:00.000Z");
 
-    render(<Island sessions={[newer, older]} onHide={() => undefined} />);
+    render(<Island sessions={[newer, older]} />);
 
-    fireEvent.pointerEnter(screen.getByTestId("island-wrapper"));
-
-    const titles = screen.getAllByText(/-project/).map((node) => node.textContent);
+    const titles = screen
+      .getAllByTitle(/-project/)
+      .map((node) => node.getAttribute("title"));
     expect(titles).toEqual(["older-project", "newer-project"]);
   });
 
@@ -82,24 +82,39 @@ describe("Island", () => {
       makeSession(`session-${index}`, `2026-06-03T0${index}:00:00.000Z`),
     );
 
-    render(<Island sessions={manySessions} onHide={() => undefined} maxVisibleCollapsed={4} />);
+    render(<Island sessions={manySessions} maxVisibleCollapsed={4} />);
 
     expect(screen.getByText(/\+\d+/)).toBeInTheDocument();
   });
 
   it("marks floating layout explicitly", () => {
-    render(<Island sessions={[]} onHide={() => undefined} snapEdge="floating" />);
+    render(<Island sessions={[]} snapEdge="floating" />);
 
     expect(screen.getByTestId("island-wrapper")).toHaveClass("island-wrapper--edge-floating");
   });
 
   it("keeps the drag surface under the React drag lifecycle", () => {
-    render(<Island sessions={[]} onHide={() => undefined} />);
+    render(<Island sessions={[]} />);
 
     expect(screen.getByTestId("island-surface")).not.toHaveAttribute(
       "data-tauri-drag-region",
       "true",
     );
+  });
+
+  it("does not expand an empty island", async () => {
+    vi.useFakeTimers();
+    const onExpandedChange = vi.fn();
+
+    render(<Island sessions={[]} onExpandedChange={onExpandedChange} />);
+
+    fireEvent.pointerEnter(screen.getByTestId("island-wrapper"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS);
+    });
+
+    expect(onExpandedChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId("island-surface")).toHaveAttribute("aria-expanded", "false");
   });
 
   it("starts a backend snap watcher for native drag completion", async () => {
@@ -122,7 +137,6 @@ describe("Island", () => {
     render(
       <Island
         sessions={[]}
-        onHide={() => undefined}
         onSnapEdgeChange={onSnapEdgeChange}
       />,
     );
@@ -169,7 +183,7 @@ describe("Island", () => {
       return Promise.reject(new Error("not running in Tauri"));
     });
 
-    render(<Island sessions={[]} onHide={() => undefined} />);
+    render(<Island sessions={[]} />);
 
     fireEvent.pointerDown(screen.getByTestId("island-surface"), {
       button: 0,
@@ -192,16 +206,14 @@ describe("Island", () => {
     expect(invokeMock).not.toHaveBeenCalledWith("snap_window");
   });
 
-  it("expands on hover and hides via callback", async () => {
+  it("reports expanded state from hover lifecycle", async () => {
     vi.useFakeTimers();
-    const onHide = vi.fn();
     const onExpandedChange = vi.fn();
     const oneSession = makeSession("one", "2026-06-03T09:00:00.000Z");
 
     render(
       <Island
         sessions={[oneSession]}
-        onHide={onHide}
         onExpandedChange={onExpandedChange}
       />,
     );
@@ -210,49 +222,14 @@ describe("Island", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS);
     });
-    expect(screen.getByText("one-project")).toBeInTheDocument();
-    expect(screen.getByText(/运行中/)).toBeInTheDocument();
+    expect(screen.getByTestId("island-surface")).toHaveAttribute("aria-expanded", "true");
     expect(onExpandedChange).toHaveBeenCalledWith(true);
-
-    fireEvent.click(screen.getByRole("button", { name: "隐藏 one-project" }));
-    expect(onHide).toHaveBeenCalledWith("one");
 
     fireEvent.pointerLeave(screen.getByTestId("island-wrapper"));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(HOVER_COLLAPSE_DELAY_MS);
     });
     expect(onExpandedChange).toHaveBeenCalledWith(false);
-  });
-
-  it("keeps expanded while the pointer moves from the island body into the panel", async () => {
-    vi.useFakeTimers();
-    const onExpandedChange = vi.fn();
-    const oneSession = makeSession("one", "2026-06-03T09:00:00.000Z");
-
-    render(
-      <Island
-        sessions={[oneSession]}
-        onHide={() => undefined}
-        onExpandedChange={onExpandedChange}
-      />,
-    );
-
-    const wrapper = screen.getByTestId("island-wrapper");
-
-    fireEvent.pointerEnter(wrapper);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS);
-    });
-
-    const panel = screen.getByTestId("island-panel");
-    fireEvent.pointerLeave(wrapper, { relatedTarget: panel });
-    fireEvent.pointerEnter(panel);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(HOVER_COLLAPSE_DELAY_MS);
-    });
-
-    expect(onExpandedChange).not.toHaveBeenCalledWith(false);
-    expect(screen.getByTestId("island-surface")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("collapses only after the pointer leaves the whole island area", async () => {
@@ -263,7 +240,6 @@ describe("Island", () => {
     render(
       <Island
         sessions={[oneSession]}
-        onHide={() => undefined}
         onExpandedChange={onExpandedChange}
       />,
     );
@@ -310,7 +286,6 @@ describe("Island", () => {
     render(
       <Island
         sessions={[]}
-        onHide={() => undefined}
         onSnapEdgeChange={onSnapEdgeChange}
       />,
     );
@@ -364,7 +339,6 @@ describe("Island", () => {
     render(
       <Island
         sessions={[]}
-        onHide={() => undefined}
         onSnapEdgeChange={onSnapEdgeChange}
       />,
     );
@@ -395,11 +369,7 @@ describe("Island", () => {
     invokeMock.mockResolvedValue(null);
 
     render(
-      <Island
-        sessions={[]}
-        onHide={() => undefined}
-        snapEdge="floating"
-      />,
+      <Island sessions={[]} snapEdge="floating" />,
     );
 
     fireEvent.pointerDown(screen.getByTestId("island-surface"), {

@@ -1,6 +1,6 @@
 use codex_island_lib::windowing::{
-    anchored_position, centered_floating_position, floating_position, frame_for_layout,
-    initial_position_for_layout, layout_for, nearest_edge, primary_mouse_release_is_pending,
+    floating_position, frame_for_layout, initial_position_for_layout, layout_for, nearest_edge,
+    panel_frame_for_anchor, point_is_inside_frame, primary_mouse_release_is_pending,
     snapped_position, Rect, SnapEdge, WindowFrame, WindowMode,
 };
 
@@ -179,33 +179,7 @@ fn initial_top_layout_is_centered_on_the_work_area() {
 }
 
 #[test]
-fn expanded_side_layout_anchors_to_screen_edge_without_gap() {
-    let work_area = Rect {
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1080,
-    };
-    let current = WindowFrame {
-        x: 1898,
-        y: 430,
-        width: 44,
-        height: 220,
-    };
-    let layout = layout_for(WindowMode::IslandExpanded, Some(SnapEdge::Right));
-
-    assert_eq!(
-        anchored_position(current, work_area, layout, SnapEdge::Right),
-        (1490, 280)
-    );
-    assert_eq!(
-        anchored_position(current, work_area, layout, SnapEdge::Left),
-        (0, 280)
-    );
-}
-
-#[test]
-fn right_expand_frame_updates_position_and_size_together() {
+fn legacy_expanded_mode_keeps_the_main_window_collapsed() {
     let work_area = Rect {
         x: 0,
         y: 0,
@@ -223,21 +197,21 @@ fn right_expand_frame_updates_position_and_size_together() {
         frame_for_layout(
             current,
             work_area,
-            WindowMode::IslandExpanded,
+            WindowMode::from_name("island_expanded"),
             Some(SnapEdge::Right),
             false,
         ),
         WindowFrame {
-            x: 2130,
-            y: 406,
-            width: 430,
-            height: 520,
+            x: 2516,
+            y: 556,
+            width: 44,
+            height: 220,
         }
     );
 }
 
 #[test]
-fn right_collapse_frame_updates_position_and_size_together() {
+fn right_collapsed_frame_updates_position_and_size_together() {
     let work_area = Rect {
         x: 0,
         y: 0,
@@ -245,10 +219,10 @@ fn right_collapse_frame_updates_position_and_size_together() {
         height: 1380,
     };
     let current = WindowFrame {
-        x: 2130,
-        y: 406,
-        width: 430,
-        height: 520,
+        x: 2340,
+        y: 556,
+        width: 220,
+        height: 44,
     };
 
     assert_eq!(
@@ -261,7 +235,7 @@ fn right_collapse_frame_updates_position_and_size_together() {
         ),
         WindowFrame {
             x: 2516,
-            y: 556,
+            y: 468,
             width: 44,
             height: 220,
         }
@@ -278,64 +252,115 @@ fn floating_layout_keeps_the_current_window_position() {
     };
 
     assert_eq!(layout_for(WindowMode::Island, None).width, 220);
-    assert_eq!(layout_for(WindowMode::IslandExpanded, None).width, 390);
     assert_eq!(floating_position(current), (current.x, current.y));
 }
 
 #[test]
-fn floating_expand_frame_keeps_the_status_island_center_stable() {
+fn top_panel_opens_below_the_stable_status_island() {
     let work_area = Rect {
         x: 0,
         y: 0,
         width: 2560,
         height: 1380,
     };
-    let current = WindowFrame {
-        x: 1000,
-        y: 400,
+    let island = WindowFrame {
+        x: 1170,
+        y: 0,
         width: 220,
         height: 44,
     };
 
-    let next = frame_for_layout(current, work_area, WindowMode::IslandExpanded, None, false);
-
     assert_eq!(
-        centered_floating_position(current, layout_for(WindowMode::IslandExpanded, None),),
-        (915, 162),
-    );
-    assert_eq!(
-        (next.x + next.width / 2, next.y + next.height / 2),
-        (
-            current.x + current.width / 2,
-            current.y + current.height / 2
-        ),
+        panel_frame_for_anchor(island, work_area, Some(SnapEdge::Top)),
+        WindowFrame {
+            x: 1085,
+            y: 54,
+            width: 390,
+            height: 520,
+        }
     );
 }
 
 #[test]
-fn floating_collapse_frame_keeps_the_status_island_center_stable() {
+fn side_panels_open_next_to_the_vertical_status_island() {
     let work_area = Rect {
         x: 0,
         y: 0,
         width: 2560,
         height: 1380,
     };
-    let current = WindowFrame {
-        x: 915,
-        y: 162,
-        width: 390,
-        height: 520,
+    let left_island = WindowFrame {
+        x: 0,
+        y: 580,
+        width: 44,
+        height: 220,
+    };
+    let right_island = WindowFrame {
+        x: 2516,
+        y: 580,
+        width: 44,
+        height: 220,
     };
 
-    let next = frame_for_layout(current, work_area, WindowMode::Island, None, false);
+    assert_eq!(
+        panel_frame_for_anchor(left_island, work_area, Some(SnapEdge::Left)),
+        WindowFrame {
+            x: 54,
+            y: 430,
+            width: 390,
+            height: 520,
+        }
+    );
+    assert_eq!(
+        panel_frame_for_anchor(right_island, work_area, Some(SnapEdge::Right)),
+        WindowFrame {
+            x: 2116,
+            y: 430,
+            width: 390,
+            height: 520,
+        }
+    );
+}
+
+#[test]
+fn floating_panel_keeps_the_status_island_fixed_and_clamps_to_screen() {
+    let work_area = Rect {
+        x: 0,
+        y: 0,
+        width: 800,
+        height: 600,
+    };
+    let island = WindowFrame {
+        x: 690,
+        y: 540,
+        width: 220,
+        height: 44,
+    };
 
     assert_eq!(
-        (next.x + next.width / 2, next.y + next.height / 2),
-        (
-            current.x + current.width / 2,
-            current.y + current.height / 2
-        ),
+        panel_frame_for_anchor(island, work_area, None),
+        WindowFrame {
+            x: 410,
+            y: 80,
+            width: 390,
+            height: 520,
+        }
     );
+}
+
+#[test]
+fn pointer_hit_testing_treats_window_edges_as_inside() {
+    let frame = WindowFrame {
+        x: 100,
+        y: 200,
+        width: 44,
+        height: 220,
+    };
+
+    assert!(point_is_inside_frame((100, 200), frame));
+    assert!(point_is_inside_frame((143, 419), frame));
+    assert!(!point_is_inside_frame((144, 419), frame));
+    assert!(!point_is_inside_frame((143, 420), frame));
 }
 
 #[test]

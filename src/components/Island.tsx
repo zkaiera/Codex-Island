@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { SessionList } from "./SessionList";
 import { SessionPill } from "./SessionPill";
 import {
   DRAG_SETTLE_DELAY_MS,
@@ -15,7 +14,6 @@ import type { SessionView } from "./session";
 
 type IslandProps = {
   sessions: SessionView[];
-  onHide: (sessionId: string) => void;
   onExpandedChange?: (expanded: boolean) => void;
   snapEdge?: SnapEdge;
   onSnapEdgeChange?: (edge: SnapEdge) => void;
@@ -24,7 +22,6 @@ type IslandProps = {
 
 export function Island({
   sessions,
-  onHide,
   onExpandedChange,
   snapEdge = "top",
   onSnapEdgeChange,
@@ -78,6 +75,12 @@ export function Island({
     expandedRef.current = expanded;
   }, [expanded]);
 
+  useEffect(() => {
+    if (orderedSessions.length === 0 && expandedRef.current) {
+      updateExpanded(false);
+    }
+  }, [orderedSessions.length]);
+
   function updateExpanded(nextExpanded: boolean) {
     if (dragging) {
       return;
@@ -94,7 +97,7 @@ export function Island({
   }
 
   function queueExpand() {
-    if (dragging) {
+    if (dragging || orderedSessions.length === 0) {
       return;
     }
 
@@ -160,14 +163,6 @@ export function Island({
     }
 
     queueCollapse();
-  }
-
-  function handlePanelPointerEnter() {
-    if (dragging) {
-      return;
-    }
-
-    cancelCollapse();
   }
 
   function clearDragSettleTimer() {
@@ -397,17 +392,6 @@ export function Island({
           {hiddenCount > 0 ? <span className="island__overflow">+{hiddenCount}</span> : null}
         </div>
       </div>
-
-      {orderedSessions.length > 0 ? (
-        <div
-          className={`island-panel${expanded ? " island-panel--open" : ""}`}
-          data-testid="island-panel"
-          onPointerEnter={handlePanelPointerEnter}
-        >
-          <div className="island-panel__header">{orderedSessions.length} active</div>
-          <SessionList sessions={orderedSessions} onHide={onHide} />
-        </div>
-      ) : null}
     </div>
   );
 }

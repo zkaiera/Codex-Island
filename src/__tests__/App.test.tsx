@@ -6,7 +6,6 @@ import {
   DRAG_SETTLE_DELAY_MS,
   HOVER_COLLAPSE_DELAY_MS,
   HOVER_EXPAND_DELAY_MS,
-  WINDOW_MODE_SHRINK_DELAY_MS,
 } from "../interactionTimings";
 
 const { invokeMock, listenMock } = vi.hoisted(() => ({
@@ -42,7 +41,11 @@ describe("App", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockImplementation((command: string) => {
-      if (command === "set_window_mode") {
+      if (
+        command === "set_window_mode" ||
+        command === "show_session_panel" ||
+        command === "request_hide_session_panel"
+      ) {
         return Promise.resolve();
       }
 
@@ -86,6 +89,10 @@ describe("App", () => {
         return Promise.resolve();
       }
 
+      if (command === "show_session_panel" || command === "request_hide_session_panel") {
+        return Promise.resolve();
+      }
+
       if (command === "get_sessions") {
         return Promise.resolve([
           {
@@ -107,9 +114,8 @@ describe("App", () => {
     });
 
     render(<App />);
-    fireEvent.pointerEnter(getIslandWrapper());
 
-    expect(await screen.findByText("existing-project")).toBeInTheDocument();
+    expect(await screen.findByLabelText("existing-project running")).toBeInTheDocument();
     expect(listenMock).toHaveBeenCalledWith("sessions:changed", expect.any(Function));
   });
 
@@ -119,29 +125,28 @@ describe("App", () => {
     render(<App />);
     fireEvent.pointerEnter(getIslandWrapper());
 
-    expect(await screen.findByText("web3-agent-research")).toBeInTheDocument();
-    expect(screen.getByText("codex-island-ui")).toBeInTheDocument();
+    expect(screen.getByLabelText("web3-agent-research running")).toBeInTheDocument();
+    expect(screen.getByLabelText("codex-island-ui completed")).toBeInTheDocument();
     await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
-        mode: "island_expanded",
+      expect(invokeMock).toHaveBeenCalledWith("show_session_panel", {
         edge: "top",
-        initial: false,
       }),
+    );
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "set_window_mode",
+      expect.objectContaining({ mode: "island_expanded" }),
     );
   });
 
-  it("keeps the island visible when hide fails outside Tauri", async () => {
+  it("keeps demo pills visible in the main island", async () => {
     window.history.pushState({}, "", "/?demo=1");
 
     render(<App />);
-    fireEvent.pointerEnter(getIslandWrapper());
-    const hideButton = await screen.findByRole("button", { name: "隐藏 web3-agent-research" });
-    fireEvent.click(hideButton);
 
-    expect(await screen.findByText("web3-agent-research")).toBeInTheDocument();
+    expect(screen.getByLabelText("web3-agent-research running")).toBeInTheDocument();
   });
 
-  it("waits briefly before returning the window to collapsed mode", async () => {
+  it("keeps the main island window collapsed while opening and closing the panel", async () => {
     vi.useFakeTimers();
     window.history.pushState({}, "", "/?demo=1");
 
@@ -153,11 +158,13 @@ describe("App", () => {
       await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS);
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
-      mode: "island_expanded",
+    expect(invokeMock).toHaveBeenCalledWith("show_session_panel", {
       edge: "top",
-      initial: false,
     });
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "set_window_mode",
+      expect.objectContaining({ mode: "island_expanded" }),
+    );
 
     fireEvent.pointerLeave(wrapper, { relatedTarget: document.body });
 
@@ -165,21 +172,7 @@ describe("App", () => {
       await vi.advanceTimersByTimeAsync(HOVER_COLLAPSE_DELAY_MS);
     });
 
-    expect(invokeMock).not.toHaveBeenCalledWith("set_window_mode", {
-      mode: "island",
-      edge: "top",
-      initial: false,
-    });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(WINDOW_MODE_SHRINK_DELAY_MS);
-    });
-
-    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
-      mode: "island",
-      edge: "top",
-      initial: false,
-    });
+    expect(invokeMock).toHaveBeenCalledWith("request_hide_session_panel");
   });
 
   it("polls backend sessions when no change event arrives", async () => {
@@ -188,6 +181,10 @@ describe("App", () => {
     let getSessionsCalls = 0;
     invokeMock.mockImplementation((command: string) => {
       if (command === "set_window_mode") {
+        return Promise.resolve();
+      }
+
+      if (command === "show_session_panel" || command === "request_hide_session_panel") {
         return Promise.resolve();
       }
 
@@ -225,20 +222,25 @@ describe("App", () => {
       await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS);
     });
 
-    expect(screen.getByText(/运行中/)).toBeInTheDocument();
+    expect(screen.getByLabelText("polling-project running")).toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2200);
     });
 
-    expect(screen.getByText(/已完成/)).toBeInTheDocument();
+    expect(screen.getByLabelText("polling-project completed")).toBeInTheDocument();
     expect(getSessionsCalls).toBeGreaterThanOrEqual(2);
   });
 
   it("uses floating when snap_window returns null and sends edge null afterwards", async () => {
     vi.useFakeTimers();
+    window.history.pushState({}, "", "/?demo=1");
     invokeMock.mockImplementation((command: string) => {
       if (command === "set_window_mode") {
+        return Promise.resolve();
+      }
+
+      if (command === "show_session_panel" || command === "request_hide_session_panel") {
         return Promise.resolve();
       }
 
@@ -292,10 +294,12 @@ describe("App", () => {
       await vi.advanceTimersByTimeAsync(HOVER_EXPAND_DELAY_MS);
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("set_window_mode", {
-      mode: "island_expanded",
+    expect(invokeMock).toHaveBeenCalledWith("show_session_panel", {
       edge: null,
-      initial: false,
     });
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "set_window_mode",
+      expect.objectContaining({ mode: "island_expanded" }),
+    );
   });
 });

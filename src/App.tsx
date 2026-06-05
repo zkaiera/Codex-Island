@@ -1,153 +1,57 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 
 import { Island } from "./components/Island";
-import { demoSessions } from "./components/demoSessions";
-import { WINDOW_MODE_SHRINK_DELAY_MS } from "./interactionTimings";
 import { toBackendEdge, type SnapEdge } from "./snapEdge";
-import type { SessionView } from "./components/session";
-
-type BackendSession = {
-  session_id: string;
-  title: string;
-  source: "wsl" | "windows";
-  ui_state: "running" | "completed" | "waiting" | "error" | "stale";
-  created_at: string;
-  updated_at: string;
-};
-
-const SESSIONS_CHANGED_EVENT = "sessions:changed";
-const SESSION_POLL_MS = 2000;
+import { useVisibleSessions } from "./sessionData";
 
 export default function App() {
-  const [sessions, setSessions] = useState<SessionView[]>(() =>
-    new URLSearchParams(window.location.search).get("demo") === "1" ? demoSessions : [],
-  );
-  const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(new Set());
-  const [windowModeExpanded, setWindowModeExpanded] = useState(false);
+  const demo = new URLSearchParams(window.location.search).get("demo") === "1";
+  const { visibleSessions } = useVisibleSessions({ demo });
   const [snapEdge, setSnapEdge] = useState<SnapEdge>("top");
   const didApplyInitialLayout = useRef(false);
-  const shrinkTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    let disposed = false;
-    let unlisten: null | (() => void) = null;
-    let pollTimer: number | null = null;
-
-    function applySessions(nextBackendSessions: BackendSession[]) {
-      const nextSessions = nextBackendSessions.map(mapSession);
-      setSessions(nextSessions);
-      setOptimisticallyHidden((current) => {
-        const next = new Set(current);
-        nextSessions.forEach((session) => next.delete(session.sessionId));
-        return next;
-      });
-    }
-
-    async function connect() {
-      try {
-        unlisten = await listen<BackendSession[]>(SESSIONS_CHANGED_EVENT, (event) => {
-          if (disposed) {
-            return;
-          }
-
-          applySessions(event.payload);
-        });
-      } catch {
-        // Running in a browser build is valid during development and tests.
-      }
-
-      try {
-        const currentSessions = await invoke<BackendSession[]>("get_sessions");
-        if (!disposed) {
-          applySessions(currentSessions);
-        }
-      } catch {
-        // 普通浏览器预览没有 Tauri 后端。
-      }
-
-      pollTimer = window.setInterval(() => {
-        void invoke<BackendSession[]>("get_sessions")
-          .then((currentSessions) => {
-            if (!disposed) {
-              applySessions(currentSessions);
-            }
-          })
-          .catch(() => {
-            // 普通浏览器预览没有 Tauri 后端。
-          });
-      }, SESSION_POLL_MS);
-    }
-
-    void connect();
-
-    return () => {
-      disposed = true;
-      if (pollTimer !== null) {
-        window.clearInterval(pollTimer);
-      }
-      unlisten?.();
-    };
-  }, []);
-
-  const visibleSessions = useMemo(
-    () => sessions.filter((session) => !optimisticallyHidden.has(session.sessionId)),
-    [optimisticallyHidden, sessions],
-  );
+  const panelExpanded = useRef(false);
 
   useLayoutEffect(() => {
-    const mode = windowModeExpanded ? "island_expanded" : "island";
     const initial = !didApplyInitialLayout.current;
     didApplyInitialLayout.current = true;
 
-    void invoke("set_window_mode", { mode, edge: toBackendEdge(snapEdge), initial }).catch(() => {
+    void invoke("set_window_mode", {
+      mode: "island",
+      edge: toBackendEdge(snapEdge),
+      initial,
+    }).catch(() => {
       // 普通浏览器预览没有 Tauri 窗口。
     });
-  }, [windowModeExpanded, snapEdge]);
-
-  useEffect(
-    () => () => {
-      if (shrinkTimer.current !== null) {
-        window.clearTimeout(shrinkTimer.current);
-      }
-    },
-    [],
-  );
-
-  async function handleHide(sessionId: string) {
-    setOptimisticallyHidden((current) => {
-      const next = new Set(current);
-      next.add(sessionId);
-      return next;
-    });
-
-    try {
-      await invoke("hide_session", { sessionId });
-    } catch {
-      setOptimisticallyHidden((current) => {
-        const next = new Set(current);
-        next.delete(sessionId);
-        return next;
-      });
-    }
-  }
+  }, [snapEdge]);
 
   function handleExpandedChange(expanded: boolean) {
-    if (shrinkTimer.current !== null) {
-      window.clearTimeout(shrinkTimer.current);
-      shrinkTimer.current = null;
-    }
-
-    if (expanded) {
-      setWindowModeExpanded(true);
+    if (!expanded && !panelExpanded.current) {
       return;
     }
 
-    shrinkTimer.current = window.setTimeout(() => {
-      shrinkTimer.current = null;
-      setWindowModeExpanded(false);
-    }, WINDOW_MODE_SHRINK_DELAY_MS);
+    panelExpanded.current = expanded;
+    if (expanded) {
+      void invoke("show_session_panel", { edge: toBackendEdge(snapEdge) }).catch(() => {
+        // 普通浏览器预览没有 Tauri 面板窗口。
+      });
+      return;
+    }
+
+    void invoke("request_hide_session_panel").catch(() => {
+      // 普通浏览器预览没有 Tauri 面板窗口。
+    });
+  }
+
+  function handleSnapEdgeChange(edge: SnapEdge) {
+    setSnapEdge(edge);
+    if (!panelExpanded.current) {
+      return;
+    }
+
+    void invoke("show_session_panel", { edge: toBackendEdge(edge) }).catch(() => {
+      // 普通浏览器预览没有 Tauri 面板窗口。
+    });
   }
 
   return (
@@ -157,22 +61,10 @@ export default function App() {
     >
       <Island
         sessions={visibleSessions}
-        onHide={handleHide}
         onExpandedChange={handleExpandedChange}
         snapEdge={snapEdge}
-        onSnapEdgeChange={setSnapEdge}
+        onSnapEdgeChange={handleSnapEdgeChange}
       />
     </main>
   );
-}
-
-function mapSession(session: BackendSession): SessionView {
-  return {
-    sessionId: session.session_id,
-    title: session.title,
-    status: session.ui_state,
-    source: session.source,
-    createdAt: session.created_at,
-    updatedAt: session.updated_at,
-  };
 }

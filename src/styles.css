@@ -110,6 +110,16 @@ body {
   border-top-right-radius: 0;
 }
 
+.island-wrapper--edge-left .island {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.island-wrapper--edge-right .island {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .island {
   display: flex;
   align-items: center;
@@ -224,14 +234,36 @@ body {
   line-height: 1;
 }
 
-.island-panel {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 50%;
+.app-shell--panel {
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+  pointer-events: auto;
+  --panel-origin: top center;
+  --panel-rest-transform: translate3d(0, -14px, 0) scale(0.96);
+  --panel-open-transform: translate3d(0, 0, 0) scale(1);
+}
+
+.app-shell--panel-edge-floating {
+  --panel-origin: top center;
+  --panel-rest-transform: translate3d(0, -14px, 0) scale(0.96);
+}
+
+.app-shell--panel-edge-left {
+  --panel-origin: left center;
+  --panel-rest-transform: translate3d(-18px, 0, 0) scale(0.96);
+}
+
+.app-shell--panel-edge-right {
+  --panel-origin: right center;
+  --panel-rest-transform: translate3d(18px, 0, 0) scale(0.96);
+}
+
+.panel-card {
   display: flex;
   flex-direction: column;
-  width: min(360px, calc(100vw - 24px));
-  max-height: min(520px, calc(100vh - 20px));
+  width: 100vw;
+  height: 100vh;
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 22px;
   background:
@@ -249,31 +281,13 @@ body {
     transform 280ms cubic-bezier(0.2, 0.9, 0.2, 1);
 }
 
-.island-wrapper--edge-left .island-panel,
-.island-wrapper--edge-right .island-panel {
-  top: 50%;
-  left: auto;
-  right: auto;
-  width: min(360px, calc(100vw - 58px));
-  max-height: calc(100vh - 20px);
-  transform: var(--panel-rest-transform);
-}
-
-.island-wrapper--edge-left .island-panel {
-  left: calc(100% + 10px);
-}
-
-.island-wrapper--edge-right .island-panel {
-  right: calc(100% + 10px);
-}
-
-.island-panel--open {
+.app-shell--panel-open .panel-card {
   opacity: 1;
   transform: var(--panel-open-transform);
   pointer-events: auto;
 }
 
-.island-panel__header {
+.panel-card__header {
   padding: 12px 18px 6px;
   color: rgb(235 239 248 / 72%);
   font-size: 13px;
