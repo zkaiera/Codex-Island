@@ -1,7 +1,7 @@
 use codex_island_lib::windowing::{
     floating_position, frame_for_layout, initial_position_for_layout, layout_for, nearest_edge,
-    panel_frame_for_anchor, point_is_inside_frame, primary_mouse_release_is_pending,
-    snapped_position, Rect, SnapEdge, WindowFrame, WindowMode,
+    panel_frame_for_anchor, panel_height_for_session_count, point_is_inside_frame,
+    primary_mouse_release_is_pending, snapped_position, Rect, SnapEdge, WindowFrame, WindowMode,
 };
 
 #[test]
@@ -271,14 +271,21 @@ fn top_panel_opens_below_the_stable_status_island() {
     };
 
     assert_eq!(
-        panel_frame_for_anchor(island, work_area, Some(SnapEdge::Top)),
+        panel_frame_for_anchor(island, work_area, Some(SnapEdge::Top), 1),
         WindowFrame {
             x: 1085,
             y: 54,
             width: 390,
-            height: 520,
+            height: 128,
         }
     );
+}
+
+#[test]
+fn panel_height_tracks_visible_session_count() {
+    assert_eq!(panel_height_for_session_count(1), 128);
+    assert_eq!(panel_height_for_session_count(3), 236);
+    assert_eq!(panel_height_for_session_count(20), 520);
 }
 
 #[test]
@@ -303,21 +310,21 @@ fn side_panels_open_next_to_the_vertical_status_island() {
     };
 
     assert_eq!(
-        panel_frame_for_anchor(left_island, work_area, Some(SnapEdge::Left)),
+        panel_frame_for_anchor(left_island, work_area, Some(SnapEdge::Left), 1),
         WindowFrame {
             x: 54,
-            y: 430,
+            y: 626,
             width: 390,
-            height: 520,
+            height: 128,
         }
     );
     assert_eq!(
-        panel_frame_for_anchor(right_island, work_area, Some(SnapEdge::Right)),
+        panel_frame_for_anchor(right_island, work_area, Some(SnapEdge::Right), 1),
         WindowFrame {
             x: 2116,
-            y: 430,
+            y: 626,
             width: 390,
-            height: 520,
+            height: 128,
         }
     );
 }
@@ -338,12 +345,12 @@ fn floating_panel_keeps_the_status_island_fixed_and_clamps_to_screen() {
     };
 
     assert_eq!(
-        panel_frame_for_anchor(island, work_area, None),
+        panel_frame_for_anchor(island, work_area, None, 1),
         WindowFrame {
             x: 410,
-            y: 80,
+            y: 472,
             width: 390,
-            height: 520,
+            height: 128,
         }
     );
 }

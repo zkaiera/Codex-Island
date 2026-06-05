@@ -9,6 +9,10 @@ const TOP_SNAP_BAND_PX: i32 = 72;
 pub const PANEL_WIDTH_PX: i32 = 390;
 pub const PANEL_HEIGHT_PX: i32 = 520;
 const PANEL_GAP_PX: i32 = 10;
+const PANEL_MIN_HEIGHT_PX: i32 = 128;
+const PANEL_HEADER_HEIGHT_PX: i32 = 44;
+const PANEL_SESSION_ROW_HEIGHT_PX: i32 = 56;
+const PANEL_VERTICAL_CHROME_PX: i32 = 24;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -325,10 +329,11 @@ pub fn panel_frame_for_anchor(
     island: WindowFrame,
     work_area: Rect,
     edge: Option<SnapEdge>,
+    session_count: usize,
 ) -> WindowFrame {
     let layout = WindowLayout {
         width: PANEL_WIDTH_PX,
-        height: PANEL_HEIGHT_PX,
+        height: panel_height_for_session_count(session_count),
     };
     let island_center_x = island.x + island.width / 2;
     let island_center_y = island.y + island.height / 2;
@@ -356,6 +361,14 @@ pub fn panel_frame_for_anchor(
         width: layout.width,
         height: layout.height,
     }
+}
+
+pub fn panel_height_for_session_count(session_count: usize) -> i32 {
+    let row_count = session_count.max(1) as i32;
+    let content_height =
+        PANEL_HEADER_HEIGHT_PX + PANEL_VERTICAL_CHROME_PX + PANEL_SESSION_ROW_HEIGHT_PX * row_count;
+
+    clamp(content_height, PANEL_MIN_HEIGHT_PX, PANEL_HEIGHT_PX)
 }
 
 pub fn point_is_inside_frame(point: (i32, i32), frame: WindowFrame) -> bool {

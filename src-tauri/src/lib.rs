@@ -118,6 +118,11 @@ fn show_session_panel(
     };
 
     let work_area = monitor.work_area();
+    watcher::refresh_store_from_disk(&state.store, &paths::default_state_dir());
+    let visible_session_count = {
+        let store = state.store.read().expect("session store poisoned");
+        store.recompute_visible(chrono::Utc::now()).len()
+    };
     let frame = windowing::panel_frame_for_anchor(
         windowing::WindowFrame {
             x: position.x,
@@ -132,6 +137,7 @@ fn show_session_panel(
             height: work_area.size.height as i32,
         },
         edge,
+        visible_session_count,
     );
 
     windowing::apply_window_frame(&panel_window, frame);

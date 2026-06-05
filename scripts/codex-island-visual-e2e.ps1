@@ -335,6 +335,25 @@ function Get-BestPanelSignal($cycles) {
   $signals | Sort-Object AverageRgbDelta -Descending | Select-Object -First 1
 }
 
+function Get-PanelWindowHeightSignal($cycles) {
+  $signals = New-Object System.Collections.Generic.List[object]
+  foreach ($cycle in $cycles) {
+    foreach ($capture in $cycle.Captures) {
+      $panel = @($capture.Windows) | Where-Object { $_.Title -eq "Codex Island Panel" } | Select-Object -First 1
+      if ($null -ne $panel) {
+        $signals.Add([pscustomobject]@{
+          Cycle = $cycle.Cycle
+          AtMs = $capture.AtMs
+          Width = $panel.Width
+          Height = $panel.Height
+        })
+      }
+    }
+  }
+
+  $signals | Sort-Object Height | Select-Object -First 1
+}
+
 $backdrop = $null
 try {
   Reset-OutputDir
@@ -351,10 +370,15 @@ try {
   $secondCycle = Run-HoverCapture "cycle2" $secondMainBefore
   $cycles = @($firstCycle, $secondCycle)
   $bestPanelSignal = Get-BestPanelSignal $cycles
+  $panelWindowHeightSignal = Get-PanelWindowHeightSignal $cycles
   $visualPanelDetected =
     $null -ne $bestPanelSignal -and
     $bestPanelSignal.AverageRgbDelta -ge 32 -and
     $bestPanelSignal.ChangedSampleRatio -ge 0.18
+  $compactPanelDetected =
+    $null -ne $panelWindowHeightSignal -and
+    $panelWindowHeightSignal.Height -ge 80 -and
+    $panelWindowHeightSignal.Height -le 160
 
   $summary = [pscustomobject]@{
     Exe = $Exe
@@ -369,14 +393,16 @@ try {
     MainBefore = $mainBefore
     Cycles = $cycles
     BestPanelSignal = $bestPanelSignal
+    PanelWindowHeightSignal = $panelWindowHeightSignal
     VisualPanelDetected = $visualPanelDetected
+    CompactPanelDetected = $compactPanelDetected
     FinalWindows = @(Get-AppWindows) | Select-Object Title, X, Y, Width, Height, Right, Bottom
   }
 
   $json = $summary | ConvertTo-Json -Depth 12
   $json
 
-  if (-not $AllowInvisible -and -not $visualPanelDetected) {
+  if (-not $AllowInvisible -and (-not $visualPanelDetected -or -not $compactPanelDetected)) {
     throw $json
   }
 } finally {
